@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Visitor {
+  id String @id @default(uuid())
+  createdAt DateTime @default(now())
+  favorites Favorite[]
+  translations TranslationHistory[]
+  plans TravelPlan[]
+}
+
+model City {
+  id String @id
+  name String
+  englishName String
+  koreanName String
+  description String
+  places Place[]
+  plans TravelPlan[]
+}
+
+model Place {
+  id String @id
+  cityId String
+  name String
+  koreanName String
+  category String
+  description String
+  address String
+  rating Float
+  price String
+  city City @relation(fields: [cityId], references: [id])
+  activities Activity[]
+}
+
+model Favorite {
+  id String @id @default(uuid())
+  visitorId String
+  targetType String
+  targetId String
+  savedAt DateTime @default(now())
+  visitor Visitor @relation(fields: [visitorId], references: [id])
+  @@unique([visitorId, targetType, targetId])
+}
+
+model TranslationHistory {
+  id String @id @default(uuid())
+  visitorId String
+  sourceLanguage String
+  targetLanguage String
+  sourceText String
+  translatedText String
+  createdAt DateTime @default(now())
+  visitor Visitor @relation(fields: [visitorId], references: [id])
+}
+
+model TravelPlan {
+  id String @id @default(uuid())
+  visitorId String
+  cityId String
+  title String
+  people Int
+  budget Json
+  createdAt DateTime @default(now())
+  visitor Visitor @relation(fields: [visitorId], references: [id])
+  city City @relation(fields: [cityId], references: [id])
+  days TravelDay[]
+  citations Citation[]
+}
+
+model TravelDay {
+  id String @id @default(uuid())
+  planId String
+  day Int
+  title String
+  summary String
+  plan TravelPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  activities Activity[]
+}
+
+model Activity {
+  id String @id @default(uuid())
+  dayId String
+  placeId String?
+  time String
+  title String
+  detail String
+  cost Int
+  transport String
+  day TravelDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  place Place? @relation(fields: [placeId], references: [id])
+}
+
+model Task {
+  id String @id @default(uuid())
+  visitorId String
+  type String
+  stage String
+  progress Int @default(0)
+  resultId String?
+  error String?
+  updatedAt DateTime @updatedAt
+}
+
+model InspirationSnapshot {
+  id String @id @default(uuid())
+  platform String
+  externalId String
+  title String
+  summary String
+  authorName String
+  sourceUrl String
+  payload Json
+  fetchedAt DateTime
+  @@unique([platform, externalId])
+}
+
+model InspirationTrend {
+  id String @id @default(uuid())
+  label String
+  cityId String
+  score Float
+  date DateTime
+  @@index([cityId, date])
+}
+
+model Citation {
+  id String @id @default(uuid())
+  planId String
+  url String
+  title String
+  provider String
+  fetchedAt DateTime
+  plan TravelPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+}

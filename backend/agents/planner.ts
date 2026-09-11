@@ -1,0 +1,8 @@
+import { Injectable } from '@nestjs/common'
+import type { PlaceRecord } from '../data/catalog'
+import type { CreateTravelPlanDto } from '../api/requests'
+import type { InspirationItem } from './tools/mcp-types'
+@Injectable()
+export class PlannerAgent {
+  run(input: CreateTravelPlanDto, places: PlaceRecord[], inspirations: InspirationItem[] = []) { const fallback = places[0]; const days = Array.from({ length: input.days }, (_, index) => { const place = places[index % Math.max(places.length, 1)] ?? fallback; const inspiration = inspirations[index % Math.max(inspirations.length, 1)]; return { day: index + 1, title: `第 ${index + 1} 天 · ${place?.name ?? '城市漫步'}`, summary: inspiration ? `参考攻略：${inspiration.title}` : '按区域安排，留出休息和临时探索时间。', activities: [{ time: '09:30', title: place?.name ?? '城市漫步', placeId: place?.id, detail: place?.description ?? '感受当地日常', cost: Math.round(input.budget * 0.08), transport: '公共交通' }, { time: '14:00', title: '街区探索', detail: inspiration?.summary ?? '结合攻略灵感自由探索附近街区', cost: Math.round(input.budget * 0.06), transport: '步行' }] } }); const daily = Math.round(input.budget / input.days); return { id: crypto.randomUUID(), title: `${input.days} 天韩国旅行计划`, cityId: input.cityId, people: input.people, days, references: inspirations.slice(0, 5).map((item) => ({ title: item.title, authorName: item.authorName, sourceUrl: item.sourceUrl, platform: item.platform, fetchedAt: item.fetchedAt })), budget: { food: Math.round(input.budget * .35), transport: Math.round(input.budget * .2), tickets: Math.round(input.budget * .15), shopping: Math.round(input.budget * .3), total: input.budget, daily }, createdAt: new Date().toISOString() } }
+}

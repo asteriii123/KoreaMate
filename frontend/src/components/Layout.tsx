@@ -1,0 +1,5 @@
+import { Compass, Home, Languages, Map, UserRound } from 'lucide-react'
+import { useEffect } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+const links = [{ to: '/', label: '首页', icon: Home }, { to: '/translate', label: '翻译', icon: Languages }, { to: '/travel', label: 'AI旅行', icon: Map }, { to: '/discover', label: '发现', icon: Compass }, { to: '/profile', label: '我的', icon: UserRound }]
+export default function Layout() { const { pathname } = useLocation(); useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [pathname]); return <><header className="topbar"><NavLink className="brand" to="/"><span>K</span>KoreaMate</NavLink><nav aria-label="主导航">{links.map(({ to, label }) => <NavLink key={to} to={to} end={to === '/'}>{label}</NavLink>)}</nav><NavLink className="top-action" to="/travel/planner">定制行程</NavLink></header><main><Outlet /></main><nav className="bottom-nav" aria-label="移动端主导航">{links.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/'}><Icon size={21}/><span>{label}</span></NavLink>)}</nav></> }

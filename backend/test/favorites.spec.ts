@@ -1,0 +1,2 @@
+import { FavoritesService } from '../services/favorites.service'
+describe('FavoritesService', () => { it('deduplicates the same favorite for a visitor', () => { const service = new FavoritesService(); const first = service.add('visitor', 'place', 'seongsu'); const second = service.add('visitor', 'place', 'seongsu'); expect(second.id).toBe(first.id); expect(service.list('visitor')).toHaveLength(1) }) })

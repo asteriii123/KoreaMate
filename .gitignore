@@ -21,14 +21,3 @@ Thumbs.db
 # Codex verification artifacts
 .codex-*.png
 .artifacts/
-frontend/node_modules/
-frontend/dist/
-frontend/test-results/
-backend/node_modules/
-backend/dist/
-backend/coverage/
-node_modules/
-*.tsbuildinfo
-.env
-.vite/
-cookies/

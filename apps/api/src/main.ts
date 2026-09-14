@@ -7,11 +7,6 @@ import { AppModule } from "./app.module.js";
 
 config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 config({ path: resolve(process.cwd(), ".env"), override: true, quiet: true });
-const legacyEnvironment: Record<string, string> = {};
-config({ path: resolve(process.cwd(), "../../backend/.env"), processEnv: legacyEnvironment, quiet: true });
-for (const name of ["LLM_API_KEY", "LLM_MODEL", "LLM_BASE_URL"] as const) {
-  process.env[name] ??= legacyEnvironment[name];
-}
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());

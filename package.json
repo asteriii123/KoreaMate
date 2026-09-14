@@ -7,13 +7,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @koreamate/web\" \"npm run dev -w @koreamate/api\"",
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @koreamate/web -- -p 3001\" \"npm run dev -w @koreamate/api\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "npm run test:integration -w @koreamate/api",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "legacy:dev": "concurrently -n frontend,backend -c yellow,blue \"npm --prefix frontend run dev\" \"npm --prefix backend run start:dev\""
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

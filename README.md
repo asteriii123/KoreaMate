@@ -5,9 +5,9 @@
 ## 项目结构
 
 ```text
-apps/web/           Next.js Web 前端
-apps/api/           NestJS + Fastify API
-packages/contracts/ 前后端共享 Zod 契约
+frontend/           Next.js Web 前端
+backend/            NestJS + Fastify API
+shared/contracts/   前后端共享 Zod 契约
 infrastructure/     PostgreSQL 与韩国旅游 MCP 容器
 docs/superpowers/   V3 设计和实施文档
 .env                本地真实配置，不会提交到 Git

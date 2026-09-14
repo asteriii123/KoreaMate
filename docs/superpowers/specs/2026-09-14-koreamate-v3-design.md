@@ -203,7 +203,7 @@ LLM 负责自然语言理解、偏好提取、追问选择、推荐解释和回�
 ## 7. 后端模块
 
 ```text
-apps/api/src/modules/
+backend/src/modules/
 ├── auth
 ├── users
 ├── conversations
@@ -321,10 +321,9 @@ DELETE /api/v1/saved-items/{id}
 
 ```text
 KoreaMate/
-├── apps/
-│   ├── web/                         # Next.js
-│   └── api/                         # NestJS + Prisma
-├── packages/
+├── frontend/                        # Next.js
+├── backend/                         # NestJS + Prisma
+├── shared/
 │   └── contracts/                   # 共享运行时 Schema 和类型
 ├── mcp/                             # 第三方 MCP 配置与封装
 ├── infrastructure/
@@ -336,7 +335,7 @@ KoreaMate/
 
 仓库使用 npm workspaces 和一份根锁文件。不引入独立 UI 包、微服务编排或额外构建系统，除非后续出现已验证需求。
 
-`packages/contracts` 是 API、SSE、行程、需求、Provider 结果和错误的唯一共享契约来源。前后端类型由运行时 Schema 推导。
+`shared/contracts` 是 API、SSE、行程、需求、Provider 结果和错误的唯一共享契约来源。前后端类型由运行时 Schema 推导。
 
 ## 11. 测试策略
 
@@ -380,7 +379,7 @@ Upstash Redis   → 异步任务与限流，仅在接入任务队列时启用
 现有 `frontend`、`backend` 和用户未提交修改只作为参考。实施时：
 
 1. 先记录 Git 状态并建立可恢复快照。
-2. 新建 `apps/web`、`apps/api` 和 `packages/contracts`。
+2. 新建 `frontend`、`backend` 和 `shared/contracts`。
 3. V3 不引用旧代码目录。
 4. V3 核心流程验证后，再由用户确认是否移除旧目录。
 5. 未经明确确认不得覆盖或删除用户未提交修改。

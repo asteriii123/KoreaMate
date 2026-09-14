@@ -3,8 +3,9 @@
   "private": true,
   "version": "3.0.0",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "frontend",
+    "backend",
+    "shared/*"
   ],
   "scripts": {
     "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @koreamate/web -- -p 3001\" \"npm run dev -w @koreamate/api\"",

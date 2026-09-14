@@ -5,7 +5,7 @@ import { config } from "dotenv";
 import { resolve } from "node:path";
 import { AppModule } from "./app.module.js";
 
-config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
+config({ path: resolve(process.cwd(), "../.env"), quiet: true });
 config({ path: resolve(process.cwd(), ".env"), override: true, quiet: true });
 
 async function bootstrap(): Promise<void> {

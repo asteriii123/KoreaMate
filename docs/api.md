@@ -12,4 +12,4 @@
 | `GET` | `/providers` | 查看外部 Provider 是否完成配置 |
 | `GET` | `/places/search?query=...&provider=...` | 搜索并保存标准化韩国地点 |
 
-请求与响应的运行时 Schema 位于 `packages/contracts/src/index.ts`。API Key 只写入根目录 `.env`。
+请求与响应的运行时 Schema 位于 `shared/contracts/src/index.ts`。API Key 只写入根目录 `.env`。

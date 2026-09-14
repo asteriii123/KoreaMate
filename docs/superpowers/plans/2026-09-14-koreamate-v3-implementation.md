@@ -29,9 +29,9 @@
 任务：
 
 1. 将根项目配置为 npm workspaces。
-2. 创建 `apps/web` Next.js App Router 应用。
-3. 创建 `apps/api` NestJS 应用。
-4. 创建 `packages/contracts`，使用 Zod 定义 API、SSE 和错误契约。
+2. 创建 `frontend` Next.js App Router 应用。
+3. 创建 `backend` NestJS 应用。
+4. 创建 `shared/contracts`，使用 Zod 定义 API、SSE 和错误契约。
 5. 添加根级 `dev`、`build`、`test`、`lint` 和 `typecheck` 命令。
 6. 增加 `.env.example` 与配置校验，不写入真实密钥。
 

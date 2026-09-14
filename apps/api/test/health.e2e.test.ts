@@ -3,7 +3,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { HealthResponseSchema } from "@koreamate/contracts";
-import { AppModule } from "../src/app.module.js";
+import { HealthModule } from "../src/modules/health/health.module.js";
 
 describe("health endpoint", () => {
   let app: NestFastifyApplication | undefined;
@@ -13,7 +13,7 @@ describe("health endpoint", () => {
   });
 
   it("returns the versioned API health contract", async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [HealthModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
     await app.init();

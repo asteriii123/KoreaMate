@@ -1,8 +1,31 @@
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
+  --color-canvas: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-text: #111827;
+  --color-muted: #5b6472;
+  --color-border: #d9dde4;
+  --color-action: #111827;
+  --color-on-action: #ffffff;
+  --color-error: #b42318;
+  --color-focus: #2563eb;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f7f8fa;
-  color: #111827;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0b0c0e;
+    --color-surface: #17191d;
+    --color-text: #f5f7fa;
+    --color-muted: #c2c8d0;
+    --color-border: #343840;
+    --color-action: #f5f7fa;
+    --color-on-action: #111827;
+    --color-error: #ffb4ab;
+    --color-focus: #7eb2ff;
+  }
 }
 
 * {
@@ -21,6 +44,6 @@ textarea {
 }
 
 :focus-visible {
-  outline: 3px solid #2563eb;
+  outline: 3px solid var(--color-focus);
   outline-offset: 3px;
 }

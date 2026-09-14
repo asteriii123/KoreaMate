@@ -6,7 +6,8 @@ import { AppModule } from "./app.module.js";
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
   app.setGlobalPrefix("api/v1");
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:3000" });
+  const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000,http://localhost:3001").split(",");
+  app.enableCors({ origin: allowedOrigins });
   await app.listen(Number(process.env.PORT ?? 3100));
 }
 

@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConversationMode {
+  TRAVEL
+  TRANSLATION
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum MessageContentType {
+  TEXT
+}
+
+enum JobStatus {
+  ACCEPTED
+  COMPLETED
+  FAILED
+}
+
+model Conversation {
+  id        String           @id @default(uuid()) @db.Uuid
+  mode      ConversationMode
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  messages  Message[]
+  jobs      Job[]
+}
+
+model Message {
+  id             String             @id @default(uuid()) @db.Uuid
+  conversationId String             @db.Uuid
+  role           MessageRole
+  contentType    MessageContentType
+  content        Json
+  idempotencyKey String
+  createdAt      DateTime           @default(now())
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  job            Job?
+
+  @@unique([conversationId, idempotencyKey])
+  @@index([conversationId, createdAt])
+}
+
+model Job {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  messageId      String       @unique @db.Uuid
+  status         JobStatus    @default(ACCEPTED)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  events         JobEvent[]
+}
+
+model JobEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  jobId      String   @db.Uuid
+  sequence   Int
+  type       String
+  data       Json
+  occurredAt DateTime @default(now())
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, sequence])
+  @@index([jobId, occurredAt])
+}

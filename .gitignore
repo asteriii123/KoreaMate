@@ -3,6 +3,7 @@ node_modules/
 
 # Builds and test artifacts
 dist/
+.next/
 test-results/
 playwright-report/
 coverage/

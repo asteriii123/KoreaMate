@@ -1,14 +1,18 @@
 {
   "name": "koreamate-workspace",
   "private": true,
-  "version": "0.1.0",
+  "version": "3.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "concurrently -n frontend,backend -c cyan,magenta \"npm:dev:frontend\" \"npm:dev:backend\"",
-    "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run start:dev",
-    "build": "npm --prefix backend run build && npm --prefix frontend run build",
-    "test": "npm --prefix backend test && npm --prefix frontend test",
-    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint"
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @koreamate/web\" \"npm run dev -w @koreamate/api\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "legacy:dev": "concurrently -n frontend,backend -c yellow,blue \"npm --prefix frontend run dev\" \"npm --prefix backend run start:dev\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

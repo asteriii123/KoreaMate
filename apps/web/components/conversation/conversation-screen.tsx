@@ -9,7 +9,7 @@ import {
   type TripPlan,
 } from "@koreamate/contracts";
 import Link from "next/link";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useRef, useState } from "react";
 import { createConversation, jobEventsUrl, sendTextMessage } from "../../lib/api";
 import styles from "./conversation-screen.module.css";
 
@@ -21,6 +21,16 @@ type ConversationScreenProps = {
   placeholder: string;
 };
 
+type TimelineItem =
+  | { id: string; kind: "user"; text: string }
+  | { id: string; kind: "question"; text: string }
+  | { id: string; kind: "translation"; value: TranslationResult }
+  | { id: string; kind: "plan"; value: TripPlan };
+
+export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing: boolean): boolean {
+  return key === "Enter" && !shiftKey && !isComposing;
+}
+
 export function ConversationScreen({
   mode,
   title,
@@ -30,10 +40,7 @@ export function ConversationScreen({
 }: ConversationScreenProps) {
   const conversationId = useRef<string | null>(null);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<string[]>([]);
-  const [translations, setTranslations] = useState<TranslationResult[]>([]);
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [plans, setPlans] = useState<TripPlan[]>([]);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +54,7 @@ export function ConversationScreen({
     setError("");
     setStatus("正在接收你的想法…");
     setInput("");
-    setMessages((current) => [...current, text]);
+    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text }]);
 
     try {
       if (!conversationId.current) {
@@ -61,19 +68,19 @@ export function ConversationScreen({
       stream.addEventListener("translation.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const translation = TranslationResultSchema.parse(event.data.translation);
-        setTranslations((current) => [...current, translation]);
+        setTimeline((current) => [...current, { id: translation.id, kind: "translation", value: translation }]);
         setStatus("");
       });
       stream.addEventListener("travel.question", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const question = typeof event.data.question === "string" ? event.data.question : "还需要补充一点信息。";
-        setQuestions((current) => [...current, question]);
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: question }]);
         setStatus("");
       });
       stream.addEventListener("travel.plan.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const plan = TripPlanSchema.parse(event.data.plan);
-        setPlans((current) => [...current, plan]);
+        setTimeline((current) => [...current, { id: plan.versionId, kind: "plan", value: plan }]);
         setStatus("");
       });
       stream.addEventListener("job.completed", () => {
@@ -99,6 +106,13 @@ export function ConversationScreen({
     }
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (shouldSubmitOnEnter(event.key, event.shiftKey, event.nativeEvent.isComposing)) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  }
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -115,14 +129,12 @@ export function ConversationScreen({
           <h1>{heading}</h1>
           <p>{description}</p>
         </div>
-        {messages.map((message, index) => (
-          <p className={styles.bubble} key={`${index}-${message}`}>{message}</p>
-        ))}
-        {questions.map((question, index) => (
-          <p className={styles.assistantBubble} key={`${index}-${question}`}>{question}</p>
-        ))}
-        {translations.map((translation) => (
-          <article className={styles.translation} key={translation.id}>
+        {timeline.map((item) => {
+          if (item.kind === "user") return <p className={styles.bubble} key={item.id}>{item.text}</p>;
+          if (item.kind === "question") return <p className={styles.assistantBubble} key={item.id}>{item.text}</p>;
+          if (item.kind === "translation") {
+            const translation = item.value;
+            return <article className={styles.translation} key={item.id}>
             <p className={styles.translationLabel}>
               {translation.targetLanguage === "ko" ? "韩语表达" : "中文意思"}
             </p>
@@ -133,10 +145,10 @@ export function ConversationScreen({
             {translation.pronunciation ? (
               <p className={styles.translationDetail}>发音提示：{translation.pronunciation}</p>
             ) : null}
-          </article>
-        ))}
-        {plans.map((plan) => (
-          <article className={styles.plan} key={plan.versionId}>
+          </article>;
+          }
+          const plan = item.value;
+          return <article className={styles.plan} key={item.id}>
             <div className={styles.planHeader}>
               <div>
                 <p className={styles.translationLabel}>第 {plan.versionNumber} 版行程</p>
@@ -163,8 +175,8 @@ export function ConversationScreen({
                 </section>
               ))}
             </div>
-          </article>
-        ))}
+          </article>;
+        })}
         {status ? <p className={styles.status}>{status}</p> : null}
       </section>
 
@@ -176,6 +188,7 @@ export function ConversationScreen({
             className={styles.input}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={placeholder}
             rows={1}
             maxLength={4_000}

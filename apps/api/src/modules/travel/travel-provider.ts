@@ -46,6 +46,8 @@ export const TravelProviderResultSchema = z.discriminatedUnion("kind", [
 
 export type TripRequirements = z.infer<typeof TripRequirementsSchema>;
 export type TravelProviderResult = z.infer<typeof TravelProviderResultSchema>;
+export const PendingFieldSchema = z.enum(["destination", "startDate", "days", "travelers", "budget"]);
+export type PendingField = z.infer<typeof PendingFieldSchema>;
 
 export interface TravelProvider {
   readonly name: string;
@@ -53,6 +55,7 @@ export interface TravelProvider {
     message: string;
     requirements: TripRequirements | null;
     previousPlan: unknown | null;
+    pendingField: PendingField | null;
     today: string;
   }): Promise<TravelProviderResult>;
 }

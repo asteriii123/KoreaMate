@@ -5,9 +5,11 @@ import { PrismaService } from "../database/prisma.service.js";
 import {
   TRAVEL_PROVIDER,
   TravelProviderNotConfiguredError,
+  PendingFieldSchema,
   TripRequirementsSchema,
   type TravelProvider,
 } from "./travel-provider.js";
+import { applyContextAnswer, inferPendingField } from "./context-answer.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number };
@@ -33,18 +35,29 @@ export class TravelService {
         },
       });
       const requirements = trip.requirement ? TripRequirementsSchema.parse(trip.requirement.data) : null;
+      const pendingField = trip.requirement?.pendingField
+        ? PendingFieldSchema.parse(trip.requirement.pendingField)
+        : null;
+      const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
       const result = await this.provider.plan({
         message: job.text,
-        requirements,
+        requirements: contextualRequirements,
         previousPlan: previous ? this.toPreviousPlan(previous) : null,
+        pendingField,
         today: new Date().toISOString().slice(0, 10),
       });
 
+      const resolvedRequirements = pendingField && contextualRequirements?.[pendingField] != null
+        ? { ...result.requirements, [pendingField]: contextualRequirements[pendingField] }
+        : result.requirements;
+      const nextPendingField = result.kind === "question"
+        ? inferPendingField(result.question, resolvedRequirements)
+        : null;
       await this.prisma.tripRequirement.upsert({
         where: { tripId: trip.id },
-        create: { tripId: trip.id, data: result.requirements },
-        update: { data: result.requirements },
+        create: { tripId: trip.id, data: resolvedRequirements, pendingField: nextPendingField },
+        update: { data: resolvedRequirements, pendingField: nextPendingField },
       });
 
       if (result.kind === "question") {
@@ -56,7 +69,7 @@ export class TravelService {
         return;
       }
 
-      const days = this.normalizeDays(result.days, result.requirements.startDate, result.requirements.days);
+      const days = this.normalizeDays(result.days, resolvedRequirements.startDate, resolvedRequirements.days);
       const totalCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);
       const versionNumber = (previous?.versionNumber ?? 0) + 1;
       const version = await this.prisma.$transaction(async (transaction) => {
@@ -66,7 +79,7 @@ export class TravelService {
             versionNumber,
             title: result.title,
             summary: result.summary,
-            currency: result.requirements.currency,
+            currency: resolvedRequirements.currency,
             totalCost,
             days: {
               create: days.map((day) => ({
@@ -74,7 +87,7 @@ export class TravelService {
                 date: day.date ? new Date(`${day.date}T00:00:00.000Z`) : null,
                 title: day.title,
                 estimatedCost: day.estimatedCost,
-                items: { create: day.items.map((item) => ({ startTime: item.time, title: item.title, description: item.description, estimatedCost: item.estimatedCost, currency: result.requirements.currency })) },
+                items: { create: day.items.map((item) => ({ startTime: item.time, title: item.title, description: item.description, estimatedCost: item.estimatedCost, currency: resolvedRequirements.currency })) },
               })),
             },
           },

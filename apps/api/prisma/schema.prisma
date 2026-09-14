@@ -114,6 +114,7 @@ model TripRequirement {
   id        String   @id @default(uuid()) @db.Uuid
   tripId    String   @unique @db.Uuid
   data      Json
+  pendingField String?
   updatedAt DateTime @updatedAt
   trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }

@@ -33,12 +33,12 @@ describe("conversation persistence", () => {
         };
       },
     };
-    const requirements = { destination: "首尔", departureCity: null, startDate: "2026-10-01", days: 2, travelers: 2, budget: 3000, currency: "CNY", interests: ["美食"], pace: "balanced" as const, constraints: [] };
+    const requirements = { destination: "首尔", departureCity: null, startDate: "2026-10-01", days: 2, travelers: 3, budget: 3000, currency: "CNY", interests: ["美食"], pace: "balanced" as const, constraints: [] };
     const fakeTravelProvider: TravelProvider = {
       name: "integration-test",
       async plan(input) {
         if (input.message === "想去首尔") {
-          return { kind: "question", requirements: { ...requirements, days: null, travelers: null }, question: "准备玩几天？" };
+          return { kind: "question", requirements: { ...requirements, travelers: null }, question: "几个人一起去？" };
         }
         return {
           kind: "plan",
@@ -162,7 +162,7 @@ describe("conversation persistence", () => {
     };
 
     expect(await send("想去首尔")).toContain("event: travel.question");
-    const firstPlanEvents = await send("五天，两个人");
+    const firstPlanEvents = await send("3");
     expect(firstPlanEvents).toContain("event: travel.plan.ready");
     expect(await send("第二天轻松一点")).toContain("event: travel.plan.ready");
 
@@ -171,6 +171,7 @@ describe("conversation persistence", () => {
     expect(trip?.versions.map((version) => version.versionNumber)).toEqual([1, 2]);
     expect(Number(trip?.versions[0]?.totalCost)).toBe(300);
     expect(trip?.versions[0]?.days.map((day) => day.date?.toISOString().slice(0, 10))).toEqual(["2026-10-01", "2026-10-02"]);
+    expect((await prisma.tripRequirement.findUnique({ where: { tripId: trip?.id } }))?.data).toMatchObject({ travelers: 3 });
 
     const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore` });
     expect(restored.statusCode).toBe(201);

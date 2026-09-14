@@ -31,6 +31,7 @@ export class OpenAiCompatibleTravelProvider implements TravelProvider {
             content: [
               "You are KoreaMate, a concise Korea trip planner for low-attention users.",
               "Return JSON only. Extract and merge requirements from the new message.",
+              "When pendingField is present, the new message answers that exact prior question; interpret short replies such as 3 using that field context.",
               "If destination, days, or travelers are missing, return kind=question and ask exactly one most important short question.",
               "Otherwise return kind=plan with a practical day-by-day plan. Never claim live prices, availability, or opening hours.",
               "Use exactly one of these two JSON shapes, with no additional top-level fields:",

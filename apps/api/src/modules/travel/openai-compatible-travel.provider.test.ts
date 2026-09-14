@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OpenAiCompatibleTravelProvider } from "./openai-compatible-travel.provider.js";
 import { TravelProviderNotConfiguredError } from "./travel-provider.js";
 
-const input = { message: "首尔玩五天，两个人", requirements: null, previousPlan: null, today: "2026-09-14" };
+const input = { message: "首尔玩五天，两个人", requirements: null, previousPlan: null, pendingField: null, today: "2026-09-14" };
 
 describe("OpenAiCompatibleTravelProvider", () => {
   afterEach(() => {

@@ -108,6 +108,7 @@ model Trip {
   conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   requirement    TripRequirement?
   versions       TripVersion[]
+  resources      TripResource[]
 }
 
 model TripRequirement {
@@ -155,7 +156,68 @@ model ItineraryItem {
   description   String
   estimatedCost Decimal      @db.Decimal(12, 2)
   currency      String       @db.VarChar(3)
+  placeId       String?      @db.Uuid
   itineraryDay  ItineraryDay @relation(fields: [itineraryDayId], references: [id], onDelete: Cascade)
+  place         Place?       @relation(fields: [placeId], references: [id], onDelete: SetNull)
 
   @@index([itineraryDayId, startTime])
+}
+
+model Place {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  normalizedName String
+  address        String?
+  latitude       Decimal         @db.Decimal(10, 7)
+  longitude      Decimal         @db.Decimal(10, 7)
+  category       String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sources        PlaceSource[]
+  itineraryItems ItineraryItem[]
+
+  @@index([normalizedName])
+}
+
+model PlaceSource {
+  id         String   @id @default(uuid()) @db.Uuid
+  placeId    String   @db.Uuid
+  provider   String
+  externalId String
+  sourceUrl  String?
+  raw        Json
+  fetchedAt  DateTime @default(now())
+  expiresAt  DateTime
+  place      Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([placeId, fetchedAt])
+}
+
+model TripResource {
+  id        String   @id @default(uuid()) @db.Uuid
+  tripId    String   @db.Uuid
+  kind      String
+  provider  String
+  query     Json
+  data      Json
+  fetchedAt DateTime @default(now())
+  expiresAt DateTime
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, kind])
+}
+
+model ProviderCall {
+  id           String   @id @default(uuid()) @db.Uuid
+  provider     String
+  operation    String
+  status       String
+  durationMs   Int?
+  errorCode    String?
+  request      Json
+  response     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([provider, createdAt])
 }

@@ -11,6 +11,7 @@ import {
   type TranslationProvider,
 } from "../src/modules/translation/translation-provider.js";
 import { TRAVEL_PROVIDER, type TravelProvider } from "../src/modules/travel/travel-provider.js";
+import { KakaoPlaceProvider } from "../src/modules/places/kakao-place.provider.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -49,11 +50,20 @@ describe("conversation persistence", () => {
         };
       },
     };
+    const fakeKakaoProvider = {
+      id: "kakao" as const,
+      configured: true,
+      async search(): Promise<Array<{ provider: "kakao"; externalId: string; name: string; address: string; latitude: number; longitude: number; category: string; sourceUrl: string; raw: { id: string } }>> {
+        return [{ provider: "kakao" as const, externalId: "kakao-1", name: "경복궁", address: "서울 종로구 사직로 161", latitude: 37.5796, longitude: 126.9769, category: "문화유적", sourceUrl: "https://place.map.kakao.com/1", raw: { id: "kakao-1" } }];
+      },
+    };
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(TRANSLATION_PROVIDER)
       .useValue(fakeTranslationProvider)
       .overrideProvider(TRAVEL_PROVIDER)
       .useValue(fakeTravelProvider)
+      .overrideProvider(KakaoPlaceProvider)
+      .useValue(fakeKakaoProvider)
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
@@ -64,6 +74,9 @@ describe("conversation persistence", () => {
     await prisma.job.deleteMany();
     await prisma.message.deleteMany();
     await prisma.conversation.deleteMany();
+    await prisma.placeSource.deleteMany();
+    await prisma.place.deleteMany();
+    await prisma.providerCall.deleteMany();
   });
 
   afterAll(async () => {
@@ -152,6 +165,17 @@ describe("conversation persistence", () => {
     expect(body).toContain("event: job.completed");
     expect(translation?.translatedText).toBe("번역: 你好");
     expect(translation?.provider).toBe("integration-test");
+  });
+
+  it("reports providers and persists normalized place sources", async () => {
+    const statuses = await app.inject({ method: "GET", url: "/api/v1/providers" });
+    expect(statuses.statusCode).toBe(200);
+    expect(statuses.json()).toContainEqual({ id: "kakao", configured: true });
+
+    const response = await app.inject({ method: "GET", url: "/api/v1/places/search?query=%E6%99%AF%E7%A6%8F%E5%AE%AB&provider=kakao" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()[0]).toMatchObject({ name: "경복궁", provider: "kakao" });
+    expect(await prisma.placeSource.count({ where: { provider: "kakao", externalId: "kakao-1" } })).toBe(1);
   });
 
   it("asks once, creates a validated plan, and preserves versions on modification", async () => {

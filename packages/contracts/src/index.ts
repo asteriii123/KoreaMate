@@ -77,6 +77,24 @@ export const TripPlanSchema = z.object({
   days: z.array(ItineraryDaySchema).min(1),
 });
 
+export const PlaceResultSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1),
+  address: z.string().nullable(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  category: z.string().nullable(),
+  provider: z.enum(["kakao", "korea-tourism"]),
+  sourceUrl: z.url().nullable(),
+  fetchedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+});
+
+export const ProviderStatusSchema = z.object({
+  id: z.enum(["kakao", "korea-tourism", "naver", "weather", "exchange-rate"]),
+  configured: z.boolean(),
+});
+
 export const JobEventSchema = z.object({
   eventId: z.uuid(),
   type: JobEventTypeSchema,
@@ -109,3 +127,5 @@ export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type TranslationResult = z.infer<typeof TranslationResultSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
+export type PlaceResult = z.infer<typeof PlaceResultSchema>;
+export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;

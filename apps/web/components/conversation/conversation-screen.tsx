@@ -1,6 +1,11 @@
 "use client";
 
-import type { ConversationMode } from "@koreamate/contracts";
+import {
+  JobEventSchema,
+  TranslationResultSchema,
+  type ConversationMode,
+  type TranslationResult,
+} from "@koreamate/contracts";
 import Link from "next/link";
 import { FormEvent, useRef, useState } from "react";
 import { createConversation, jobEventsUrl, sendTextMessage } from "../../lib/api";
@@ -24,6 +29,7 @@ export function ConversationScreen({
   const conversationId = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
+  const [translations, setTranslations] = useState<TranslationResult[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,8 +52,24 @@ export function ConversationScreen({
       const accepted = await sendTextMessage(conversationId.current, text, crypto.randomUUID());
       const stream = new EventSource(jobEventsUrl(accepted.jobId));
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
+      stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
+      stream.addEventListener("translation.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const translation = TranslationResultSchema.parse(event.data.translation);
+        setTranslations((current) => [...current, translation]);
+        setStatus("");
+      });
       stream.addEventListener("job.completed", () => {
-        setStatus("内容已安全保存。AI 能力将在下一阶段接入。");
+        if (mode === "TRAVEL") {
+          setStatus("内容已安全保存。旅行规划能力将在下一阶段接入。");
+        }
+        setBusy(false);
+        stream.close();
+      });
+      stream.addEventListener("job.failed", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        setError(typeof event.data.message === "string" ? event.data.message : "暂时无法完成，请稍后再试。");
+        setStatus("");
         setBusy(false);
         stream.close();
       });
@@ -81,6 +103,20 @@ export function ConversationScreen({
         </div>
         {messages.map((message, index) => (
           <p className={styles.bubble} key={`${index}-${message}`}>{message}</p>
+        ))}
+        {translations.map((translation) => (
+          <article className={styles.translation} key={translation.id}>
+            <p className={styles.translationLabel}>
+              {translation.targetLanguage === "ko" ? "韩语表达" : "中文意思"}
+            </p>
+            <p className={styles.translationText}>{translation.translatedText}</p>
+            {translation.naturalExpression !== translation.translatedText ? (
+              <p className={styles.translationDetail}>更自然：{translation.naturalExpression}</p>
+            ) : null}
+            {translation.pronunciation ? (
+              <p className={styles.translationDetail}>发音提示：{translation.pronunciation}</p>
+            ) : null}
+          </article>
         ))}
         {status ? <p className={styles.status}>{status}</p> : null}
       </section>

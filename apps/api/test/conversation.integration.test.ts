@@ -6,6 +6,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AcceptedMessageSchema, ConversationSchema } from "@koreamate/contracts";
 import { AppModule } from "../src/app.module.js";
 import { PrismaService } from "../src/modules/database/prisma.service.js";
+import {
+  TRANSLATION_PROVIDER,
+  type TranslationProvider,
+} from "../src/modules/translation/translation-provider.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -15,7 +19,23 @@ describe("conversation persistence", () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const fakeTranslationProvider: TranslationProvider = {
+      name: "integration-test",
+      async translate(text) {
+        return {
+          sourceLanguage: "zh",
+          targetLanguage: "ko",
+          translatedText: `번역: ${text}`,
+          naturalExpression: `자연스러운 번역: ${text}`,
+          pronunciation: "测试发音",
+          politeness: "polite",
+        };
+      },
+    };
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(TRANSLATION_PROVIDER)
+      .useValue(fakeTranslationProvider)
+      .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
     await app.listen(0, "127.0.0.1");
@@ -86,5 +106,32 @@ describe("conversation persistence", () => {
     expect(events.headers.get("content-type")).toContain("text/event-stream");
     expect(body).toContain("event: message.accepted");
     expect(body).toContain("event: job.completed");
+  });
+
+  it("persists and streams a real provider translation result", async () => {
+    const conversation = ConversationSchema.parse((await app.inject({
+      method: "POST",
+      url: "/api/v1/conversations",
+      payload: { mode: "TRANSLATION" },
+    })).json());
+    const accepted = AcceptedMessageSchema.parse((await app.inject({
+      method: "POST",
+      url: `/api/v1/conversations/${conversation.id}/messages`,
+      headers: { "idempotency-key": randomUUID() },
+      payload: { content: { type: "TEXT", text: "你好" } },
+    })).json());
+
+    const response = await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`);
+    const body = await response.text();
+    const translation = await prisma.translation.findUnique({
+      where: { sourceMessageId: accepted.messageId },
+    });
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("event: translation.started");
+    expect(body).toContain("event: translation.ready");
+    expect(body).toContain("event: job.completed");
+    expect(translation?.translatedText).toBe("번역: 你好");
+    expect(translation?.provider).toBe("integration-test");
   });
 });

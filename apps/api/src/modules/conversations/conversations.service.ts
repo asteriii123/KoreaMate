@@ -7,10 +7,14 @@ import type {
 } from "@koreamate/contracts";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
+import { TranslationService } from "../translation/translation.service.js";
 
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly translation: TranslationService,
+  ) {}
 
   async create(mode: ConversationMode): Promise<Conversation> {
     const conversation = await this.prisma.conversation.create({ data: { mode } });
@@ -54,25 +58,37 @@ export class ConversationsService {
         const job = await transaction.job.create({
           data: { conversationId, messageId: message.id },
         });
-        await transaction.jobEvent.createMany({
-          data: [
-            {
-              jobId: job.id,
-              sequence: 1,
-              type: "message.accepted",
-              data: { messageId: message.id },
-            },
-            {
-              jobId: job.id,
+        await transaction.jobEvent.create({
+          data: {
+            jobId: job.id,
+            sequence: 1,
+            type: "message.accepted",
+            data: { messageId: message.id },
+          },
+        });
+        return { message, job };
+      });
+
+      if (conversation.mode === "TRANSLATION") {
+        void this.translation.process({
+          jobId: result.job.id,
+          conversationId,
+          sourceMessageId: result.message.id,
+          text: request.content.text,
+        });
+      } else {
+        await this.prisma.$transaction([
+          this.prisma.jobEvent.create({
+            data: {
+              jobId: result.job.id,
               sequence: 2,
               type: "job.completed",
               data: { stage: "MESSAGE_STORED" },
             },
-          ],
-        });
-        await transaction.job.update({ where: { id: job.id }, data: { status: "COMPLETED" } });
-        return { message, job };
-      });
+          }),
+          this.prisma.job.update({ where: { id: result.job.id }, data: { status: "COMPLETED" } }),
+        ]);
+      }
 
       return { messageId: result.message.id, jobId: result.job.id, status: "ACCEPTED" };
     } catch (error) {

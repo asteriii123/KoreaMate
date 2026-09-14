@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import type { MessageEvent } from "@nestjs/common";
 import type { JobEvent } from "@koreamate/contracts";
+import { Observable } from "rxjs";
 import { PrismaService } from "../database/prisma.service.js";
 
 @Injectable()
@@ -26,5 +28,35 @@ export class JobsService {
       occurredAt: event.occurredAt.toISOString(),
       data: event.data as JobEvent["data"],
     }));
+  }
+
+  stream(jobId: string, lastEventId?: string): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      let active = true;
+      let cursor = lastEventId;
+
+      const poll = async (): Promise<void> => {
+        try {
+          while (active) {
+            const events = await this.getEvents(jobId, cursor);
+            for (const event of events) {
+              cursor = event.eventId;
+              subscriber.next({ id: event.eventId, type: event.type, data: event });
+            }
+            const job = await this.prisma.job.findUnique({ where: { id: jobId }, select: { status: true } });
+            if (!job || job.status === "COMPLETED" || job.status === "FAILED") {
+              subscriber.complete();
+              return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+        } catch (error) {
+          subscriber.error(error);
+        }
+      };
+
+      void poll();
+      return () => { active = false; };
+    });
   }
 }

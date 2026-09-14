@@ -4,6 +4,7 @@ import {
   CreateConversationRequestSchema,
   HealthResponseSchema,
   SendMessageRequestSchema,
+  TranslationResultSchema,
 } from "./index.js";
 
 describe("shared contracts", () => {
@@ -36,5 +37,18 @@ describe("shared contracts", () => {
     expect(() => SendMessageRequestSchema.parse({
       content: { type: "TEXT", text: "a".repeat(4_001) },
     })).toThrow();
+  });
+
+  it("validates a structured translation result", () => {
+    expect(TranslationResultSchema.parse({
+      id: "92de6446-a3cc-40ed-9f6d-c0f76209f632",
+      sourceLanguage: "zh",
+      targetLanguage: "ko",
+      sourceText: "请问可以刷卡吗？",
+      translatedText: "카드로 결제할 수 있나요?",
+      naturalExpression: "카드 결제 가능해요?",
+      pronunciation: "卡德 决杰 卡能黑哟",
+      politeness: "polite",
+    }).targetLanguage).toBe("ko");
   });
 });

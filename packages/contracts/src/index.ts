@@ -29,9 +29,22 @@ export const AcceptedMessageSchema = z.object({
 
 export const JobEventTypeSchema = z.enum([
   "message.accepted",
+  "translation.started",
+  "translation.ready",
   "job.completed",
   "job.failed",
 ]);
+
+export const TranslationResultSchema = z.object({
+  id: z.uuid(),
+  sourceLanguage: z.enum(["zh", "ko"]),
+  targetLanguage: z.enum(["zh", "ko"]),
+  sourceText: z.string().min(1),
+  translatedText: z.string().min(1),
+  naturalExpression: z.string().min(1),
+  pronunciation: z.string().nullable(),
+  politeness: z.enum(["casual", "polite", "formal"]),
+});
 
 export const JobEventSchema = z.object({
   eventId: z.uuid(),
@@ -63,3 +76,4 @@ export type Conversation = z.infer<typeof ConversationSchema>;
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
+export type TranslationResult = z.infer<typeof TranslationResultSchema>;

@@ -31,6 +31,9 @@ export const JobEventTypeSchema = z.enum([
   "message.accepted",
   "translation.started",
   "translation.ready",
+  "travel.started",
+  "travel.question",
+  "travel.plan.ready",
   "job.completed",
   "job.failed",
 ]);
@@ -44,6 +47,34 @@ export const TranslationResultSchema = z.object({
   naturalExpression: z.string().min(1),
   pronunciation: z.string().nullable(),
   politeness: z.enum(["casual", "polite", "formal"]),
+});
+
+export const ItineraryItemSchema = z.object({
+  id: z.uuid(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  estimatedCost: z.number().nonnegative(),
+  currency: z.string().length(3),
+});
+
+export const ItineraryDaySchema = z.object({
+  dayNumber: z.number().int().positive(),
+  date: z.iso.date().nullable(),
+  title: z.string().min(1),
+  items: z.array(ItineraryItemSchema).min(1),
+  estimatedCost: z.number().nonnegative(),
+});
+
+export const TripPlanSchema = z.object({
+  tripId: z.uuid(),
+  versionId: z.uuid(),
+  versionNumber: z.number().int().positive(),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  currency: z.string().length(3),
+  totalEstimatedCost: z.number().nonnegative(),
+  days: z.array(ItineraryDaySchema).min(1),
 });
 
 export const JobEventSchema = z.object({
@@ -77,3 +108,4 @@ export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type TranslationResult = z.infer<typeof TranslationResultSchema>;
+export type TripPlan = z.infer<typeof TripPlanSchema>;

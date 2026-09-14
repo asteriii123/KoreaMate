@@ -10,6 +10,7 @@ import {
   TRANSLATION_PROVIDER,
   type TranslationProvider,
 } from "../src/modules/translation/translation-provider.js";
+import { TRAVEL_PROVIDER, type TravelProvider } from "../src/modules/travel/travel-provider.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -32,9 +33,27 @@ describe("conversation persistence", () => {
         };
       },
     };
+    const requirements = { destination: "首尔", departureCity: null, startDate: "2026-10-01", days: 2, travelers: 2, budget: 3000, currency: "CNY", interests: ["美食"], pace: "balanced" as const, constraints: [] };
+    const fakeTravelProvider: TravelProvider = {
+      name: "integration-test",
+      async plan(input) {
+        if (input.message === "想去首尔") {
+          return { kind: "question", requirements: { ...requirements, days: null, travelers: null }, question: "准备玩几天？" };
+        }
+        return {
+          kind: "plan",
+          requirements,
+          title: "首尔两日轻旅行",
+          summary: input.previousPlan ? "根据你的要求调整了节奏。" : "第一次去首尔也不费力。",
+          days: [1, 2].map((dayNumber) => ({ dayNumber, date: null, title: `首尔第 ${dayNumber} 天`, items: [{ time: "10:00", title: dayNumber === 1 ? "景福宫" : "圣水洞", description: "轻松逛逛", estimatedCost: 100 * dayNumber }] })),
+        };
+      },
+    };
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(TRANSLATION_PROVIDER)
       .useValue(fakeTranslationProvider)
+      .overrideProvider(TRAVEL_PROVIDER)
+      .useValue(fakeTravelProvider)
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
@@ -133,5 +152,29 @@ describe("conversation persistence", () => {
     expect(body).toContain("event: job.completed");
     expect(translation?.translatedText).toBe("번역: 你好");
     expect(translation?.provider).toBe("integration-test");
+  });
+
+  it("asks once, creates a validated plan, and preserves versions on modification", async () => {
+    const conversation = ConversationSchema.parse((await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode: "TRAVEL" } })).json());
+    const send = async (text: string): Promise<string> => {
+      const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID() }, payload: { content: { type: "TEXT", text } } })).json());
+      return (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
+    };
+
+    expect(await send("想去首尔")).toContain("event: travel.question");
+    const firstPlanEvents = await send("五天，两个人");
+    expect(firstPlanEvents).toContain("event: travel.plan.ready");
+    expect(await send("第二天轻松一点")).toContain("event: travel.plan.ready");
+
+    const trip = await prisma.trip.findUnique({ where: { conversationId: conversation.id }, include: { versions: { orderBy: { versionNumber: "asc" }, include: { days: true } } } });
+    expect(trip?.versions).toHaveLength(2);
+    expect(trip?.versions.map((version) => version.versionNumber)).toEqual([1, 2]);
+    expect(Number(trip?.versions[0]?.totalCost)).toBe(300);
+    expect(trip?.versions[0]?.days.map((day) => day.date?.toISOString().slice(0, 10))).toEqual(["2026-10-01", "2026-10-02"]);
+
+    const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore` });
+    expect(restored.statusCode).toBe(201);
+    expect(restored.json().versionNumber).toBe(3);
+    expect(await prisma.tripVersion.count({ where: { tripId: trip?.id } })).toBe(3);
   });
 });

@@ -3,8 +3,10 @@
 import {
   JobEventSchema,
   TranslationResultSchema,
+  TripPlanSchema,
   type ConversationMode,
   type TranslationResult,
+  type TripPlan,
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { FormEvent, useRef, useState } from "react";
@@ -30,6 +32,8 @@ export function ConversationScreen({
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
   const [translations, setTranslations] = useState<TranslationResult[]>([]);
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [plans, setPlans] = useState<TripPlan[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,16 +57,26 @@ export function ConversationScreen({
       const stream = new EventSource(jobEventsUrl(accepted.jobId));
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
       stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
+      stream.addEventListener("travel.started", () => setStatus("正在整理你的旅行需求…"));
       stream.addEventListener("translation.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const translation = TranslationResultSchema.parse(event.data.translation);
         setTranslations((current) => [...current, translation]);
         setStatus("");
       });
+      stream.addEventListener("travel.question", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const question = typeof event.data.question === "string" ? event.data.question : "还需要补充一点信息。";
+        setQuestions((current) => [...current, question]);
+        setStatus("");
+      });
+      stream.addEventListener("travel.plan.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const plan = TripPlanSchema.parse(event.data.plan);
+        setPlans((current) => [...current, plan]);
+        setStatus("");
+      });
       stream.addEventListener("job.completed", () => {
-        if (mode === "TRAVEL") {
-          setStatus("内容已安全保存。旅行规划能力将在下一阶段接入。");
-        }
         setBusy(false);
         stream.close();
       });
@@ -104,6 +118,9 @@ export function ConversationScreen({
         {messages.map((message, index) => (
           <p className={styles.bubble} key={`${index}-${message}`}>{message}</p>
         ))}
+        {questions.map((question, index) => (
+          <p className={styles.assistantBubble} key={`${index}-${question}`}>{question}</p>
+        ))}
         {translations.map((translation) => (
           <article className={styles.translation} key={translation.id}>
             <p className={styles.translationLabel}>
@@ -116,6 +133,36 @@ export function ConversationScreen({
             {translation.pronunciation ? (
               <p className={styles.translationDetail}>发音提示：{translation.pronunciation}</p>
             ) : null}
+          </article>
+        ))}
+        {plans.map((plan) => (
+          <article className={styles.plan} key={plan.versionId}>
+            <div className={styles.planHeader}>
+              <div>
+                <p className={styles.translationLabel}>第 {plan.versionNumber} 版行程</p>
+                <h2>{plan.title}</h2>
+              </div>
+              <p className={styles.planCost}>约 {plan.totalEstimatedCost.toLocaleString()} {plan.currency}</p>
+            </div>
+            <p className={styles.planSummary}>{plan.summary}</p>
+            <div className={styles.days}>
+              {plan.days.map((day) => (
+                <section className={styles.day} key={day.dayNumber}>
+                  <div className={styles.dayHeading}>
+                    <p>Day {day.dayNumber}{day.date ? ` · ${day.date.slice(5)}` : ""}</p>
+                    <h3>{day.title}</h3>
+                  </div>
+                  {day.items.map((item) => (
+                    <div className={styles.planItem} key={item.id}>
+                      <time>{item.time}</time>
+                      <div><strong>{item.title}</strong><p>{item.description}</p></div>
+                      <span>{item.estimatedCost > 0 ? `约 ${item.estimatedCost}` : "免费"}</span>
+                    </div>
+                  ))}
+                  <p className={styles.dayCost}>当天约 {day.estimatedCost.toLocaleString()} {plan.currency}</p>
+                </section>
+              ))}
+            </div>
           </article>
         ))}
         {status ? <p className={styles.status}>{status}</p> : null}

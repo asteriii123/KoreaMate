@@ -8,12 +8,14 @@ import type {
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { TranslationService } from "../translation/translation.service.js";
+import { TravelService } from "../travel/travel.service.js";
 
 @Injectable()
 export class ConversationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly translation: TranslationService,
+    private readonly travel: TravelService,
   ) {}
 
   async create(mode: ConversationMode): Promise<Conversation> {
@@ -77,17 +79,12 @@ export class ConversationsService {
           text: request.content.text,
         });
       } else {
-        await this.prisma.$transaction([
-          this.prisma.jobEvent.create({
-            data: {
-              jobId: result.job.id,
-              sequence: 2,
-              type: "job.completed",
-              data: { stage: "MESSAGE_STORED" },
-            },
-          }),
-          this.prisma.job.update({ where: { id: result.job.id }, data: { status: "COMPLETED" } }),
-        ]);
+        void this.travel.process({
+          jobId: result.job.id,
+          conversationId,
+          sourceMessageId: result.message.id,
+          text: request.content.text,
+        });
       }
 
       return { messageId: result.message.id, jobId: result.job.id, status: "ACCEPTED" };

@@ -36,6 +36,7 @@ model Conversation {
   messages  Message[]
   jobs      Job[]
   translations Translation[]
+  trip         Trip?
 }
 
 model Message {
@@ -96,4 +97,64 @@ model JobEvent {
 
   @@unique([jobId, sequence])
   @@index([jobId, occurredAt])
+}
+
+model Trip {
+  id             String          @id @default(uuid()) @db.Uuid
+  conversationId String          @unique @db.Uuid
+  title          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requirement    TripRequirement?
+  versions       TripVersion[]
+}
+
+model TripRequirement {
+  id        String   @id @default(uuid()) @db.Uuid
+  tripId    String   @unique @db.Uuid
+  data      Json
+  updatedAt DateTime @updatedAt
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+}
+
+model TripVersion {
+  id            String         @id @default(uuid()) @db.Uuid
+  tripId        String         @db.Uuid
+  versionNumber Int
+  title         String
+  summary       String
+  currency      String         @db.VarChar(3)
+  totalCost     Decimal        @db.Decimal(12, 2)
+  createdAt     DateTime       @default(now())
+  trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  days          ItineraryDay[]
+
+  @@unique([tripId, versionNumber])
+}
+
+model ItineraryDay {
+  id            String          @id @default(uuid()) @db.Uuid
+  tripVersionId String          @db.Uuid
+  dayNumber     Int
+  date          DateTime?       @db.Date
+  title         String
+  estimatedCost Decimal         @db.Decimal(12, 2)
+  tripVersion   TripVersion     @relation(fields: [tripVersionId], references: [id], onDelete: Cascade)
+  items         ItineraryItem[]
+
+  @@unique([tripVersionId, dayNumber])
+}
+
+model ItineraryItem {
+  id            String       @id @default(uuid()) @db.Uuid
+  itineraryDayId String      @db.Uuid
+  startTime     String       @db.VarChar(5)
+  title         String
+  description   String
+  estimatedCost Decimal      @db.Decimal(12, 2)
+  currency      String       @db.VarChar(3)
+  itineraryDay  ItineraryDay @relation(fields: [itineraryDayId], references: [id], onDelete: Cascade)
+
+  @@index([itineraryDayId, startTime])
 }

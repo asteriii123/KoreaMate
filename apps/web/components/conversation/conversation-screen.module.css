@@ -68,6 +68,16 @@
   white-space: pre-wrap;
 }
 
+.assistantBubble {
+  width: fit-content;
+  max-width: 88%;
+  padding: 14px 18px;
+  border-radius: 22px 22px 22px 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  line-height: 1.55;
+}
+
 .translation {
   margin-top: 24px;
   padding: 24px;
@@ -94,6 +104,92 @@
   margin: 16px 0 0;
   color: var(--color-muted);
   line-height: 1.6;
+}
+
+.plan {
+  margin-top: 24px;
+  padding: clamp(20px, 5vw, 32px);
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
+  background: var(--color-surface);
+}
+
+.planHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+}
+
+.planHeader h2,
+.dayHeading h3 {
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+
+.planCost,
+.dayCost {
+  margin: 0;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.planSummary {
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.days {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.day {
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--color-canvas);
+}
+
+.dayHeading p {
+  margin: 0 0 5px;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.planItem {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.planItem time,
+.planItem span,
+.planItem p {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.planItem p {
+  margin: 5px 0 0;
+  line-height: 1.5;
+}
+
+.dayCost {
+  margin-top: 16px;
+  text-align: right;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 540px) {
+  .planHeader { display: block; }
+  .planCost { margin-top: 8px; }
+  .planItem { grid-template-columns: 44px 1fr; }
+  .planItem span { grid-column: 2; }
 }
 
 .composerWrap {

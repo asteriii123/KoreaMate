@@ -232,7 +232,10 @@ export function ConversationScreen({
               <ul className={styles.importPlaces}>{visibleItems.map((value, index) => <li key={`${value.name}-${index}`}>
                 <label>
                   <input type="checkbox" checked={selected.includes(index)} disabled={!value.verified || busy} onChange={() => toggleImportItem(preview.id, index)} />
-                  <span>{value.place?.name ?? value.name}</span>
+                  <span className={styles.importPlaceName}>
+                    <strong>{value.name}</strong>
+                    {value.place?.name && value.place.name !== value.name ? <small>{value.place.name}</small> : null}
+                  </span>
                 </label>
                 <small>{value.verified ? "已核验" : "待确认"}</small>
               </li>)}</ul>

@@ -276,6 +276,9 @@
 .importPlaces label { min-height: 44px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .importPlaces input { width: 20px; height: 20px; accent-color: var(--color-action); }
 .importPlaces small { color: var(--color-muted); white-space: nowrap; }
+.importPlaceName { display: grid; gap: 2px; }
+.importPlaceName strong { font-weight: 600; }
+.importPlaceName small { font-size: 0.78rem; font-weight: 400; }
 .importMore { min-height: 44px; margin: -8px 0 12px; padding: 0; border: 0; background: transparent; color: var(--color-action); font-weight: 650; cursor: pointer; }
 .importAction { width: 100%; min-height: 48px; padding: 0 18px; border: 0; border-radius: 24px; background: var(--color-action); color: var(--color-on-action); font-weight: 650; cursor: pointer; }
 .importAction:disabled { opacity: 0.38; cursor: default; }

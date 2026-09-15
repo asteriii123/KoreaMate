@@ -8,12 +8,14 @@ import { TRAVEL_PROVIDER } from "./travel-provider.js";
 import { TravelService } from "./travel.service.js";
 import { TravelController } from "./travel.controller.js";
 import { TripContextService } from "./trip-context.service.js";
+import { GuideImportService } from "./guide-import.service.js";
 
 @Module({
   imports: [DatabaseModule, PlacesModule],
   controllers: [TravelController],
   providers: [
     TravelService,
+    GuideImportService,
     TripContextService,
     OpenMeteoWeatherProvider,
     FrankfurterExchangeProvider,

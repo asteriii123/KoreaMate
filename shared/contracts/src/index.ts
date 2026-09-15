@@ -17,8 +17,14 @@ export const TextMessageContentSchema = z.object({
   text: z.string().trim().min(1).max(4_000),
 });
 
+export const ImportMessageContentSchema = z.object({
+  type: z.literal("IMPORT"),
+  text: z.string().trim().max(4_000).default(""),
+  images: z.array(z.string().max(2_000_000).regex(/^data:image\/(?:jpeg|png|webp);base64,/)).max(4).default([]),
+}).refine((value) => value.text.length > 0 || value.images.length > 0, { message: "A link, text, or image is required" });
+
 export const SendMessageRequestSchema = z.object({
-  content: TextMessageContentSchema,
+  content: z.discriminatedUnion("type", [TextMessageContentSchema, ImportMessageContentSchema]),
 });
 
 export const AcceptedMessageSchema = z.object({
@@ -34,6 +40,7 @@ export const JobEventTypeSchema = z.enum([
   "travel.started",
   "travel.question",
   "travel.answer",
+  "travel.import.ready",
   "travel.plan.ready",
   "job.completed",
   "job.failed",
@@ -128,6 +135,20 @@ export const PlaceResultSchema = z.object({
   expiresAt: z.iso.datetime(),
 });
 
+export const GuideImportPreviewSchema = z.object({
+  id: z.uuid(),
+  sourceCount: z.number().int().positive(),
+  failedSourceCount: z.number().int().nonnegative(),
+  needsFallback: z.boolean(),
+  items: z.array(z.object({
+    name: z.string().min(1),
+    kind: z.enum(["attraction", "restaurant", "hotel", "shopping", "other"]),
+    note: z.string(),
+    verified: z.boolean(),
+    place: PlaceResultSchema.nullable(),
+  })).max(30),
+});
+
 export const ProviderStatusSchema = z.object({
   id: z.enum(["kakao", "korea-tourism", "naver", "weather", "exchange-rate"]),
   configured: z.boolean(),
@@ -161,6 +182,7 @@ export type ConversationMode = z.infer<typeof ConversationModeSchema>;
 export type CreateConversationRequest = z.infer<typeof CreateConversationRequestSchema>;
 export type Conversation = z.infer<typeof ConversationSchema>;
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
+export type GuideImportPreview = z.infer<typeof GuideImportPreviewSchema>;
 export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type TranslationResult = z.infer<typeof TranslationResultSchema>;

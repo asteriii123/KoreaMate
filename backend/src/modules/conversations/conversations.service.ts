@@ -84,6 +84,7 @@ export class ConversationsService {
           conversationId,
           sourceMessageId: result.message.id,
           text: request.content.text,
+          images: request.content.type === "IMPORT" ? request.content.images : [],
         });
       }
 

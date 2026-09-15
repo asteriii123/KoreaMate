@@ -41,6 +41,11 @@ describe("shared contracts", () => {
     })).toThrow();
   });
 
+  it("accepts a bounded guide screenshot import", () => {
+    expect(SendMessageRequestSchema.parse({ content: { type: "IMPORT", text: "", images: ["data:image/jpeg;base64,YQ=="] } }).content.type).toBe("IMPORT");
+    expect(() => SendMessageRequestSchema.parse({ content: { type: "IMPORT", text: "", images: [] } })).toThrow();
+  });
+
   it("validates a structured translation result", () => {
     expect(TranslationResultSchema.parse({
       id: "92de6446-a3cc-40ed-9f6d-c0f76209f632",

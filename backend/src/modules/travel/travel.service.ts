@@ -12,8 +12,9 @@ import {
 } from "./travel-provider.js";
 import { applyContextAnswer, inferPendingField } from "./context-answer.js";
 import { TripContextService, type TripContext } from "./trip-context.service.js";
+import { GuideImportService } from "./guide-import.service.js";
 
-type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string };
+type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
 type PlannedDay = { dayNumber: number; date: string | null; title: string; items: PlannedItem[]; estimatedCost: number };
 type StoredItem = { id: string; startTime: string; title: string; description: string; estimatedCost: unknown; currency: string; place: null | { name: string; address: string | null; latitude: unknown; longitude: unknown; sources: Array<{ sourceUrl: string | null }> } };
@@ -25,6 +26,7 @@ export class TravelService {
     @Inject(TRAVEL_PROVIDER) private readonly provider: TravelProvider,
     private readonly places: PlacesService,
     private readonly tripContext: TripContextService,
+    private readonly guideImport: GuideImportService,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -46,6 +48,13 @@ export class TravelService {
       const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
       const today = new Date().toISOString().slice(0, 10);
+      if ((job.images?.length ?? 0) > 0 || this.hasGuideUrl(job.text)) {
+        const preview = await this.guideImport.parse({ tripId: trip.id, text: job.text, images: job.images ?? [] });
+        await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { guideImportId: preview.id } } });
+        await this.appendEvent(job.jobId, "travel.import.ready", { preview });
+        await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_IMPORT_READY" });
+        return;
+      }
       if (previous && this.isWeatherQuestion(job.text)) {
         await this.answerWeatherQuestion(job, trip.id, requirements?.destination ?? null, today);
         return;
@@ -186,6 +195,10 @@ export class TravelService {
 
   private isWeatherQuestion(text: string): boolean {
     return /(天气|气温|温度|下雨|降雨|带伞|冷不冷|热不热)/u.test(text);
+  }
+
+  private hasGuideUrl(text: string): boolean {
+    return /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com)\//iu.test(text);
   }
 
   private async answerWeatherQuestion(job: TravelJob, tripId: string, currentDestination: string | null, today: string): Promise<void> {

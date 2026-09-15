@@ -9,7 +9,7 @@ config({ path: resolve(process.cwd(), "../.env"), quiet: true });
 config({ path: resolve(process.cwd(), ".env"), override: true, quiet: true });
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ bodyLimit: 10 * 1024 * 1024 }));
   app.setGlobalPrefix("api/v1");
   const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000,http://localhost:3001").split(",");
   app.enableCors({ origin: allowedOrigins });

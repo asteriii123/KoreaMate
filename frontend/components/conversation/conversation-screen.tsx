@@ -2,15 +2,17 @@
 
 import {
   JobEventSchema,
+  GuideImportPreviewSchema,
   TranslationResultSchema,
   TripPlanSchema,
   type ConversationMode,
   type TranslationResult,
   type TripPlan,
+  type GuideImportPreview,
 } from "@koreamate/contracts";
 import Link from "next/link";
-import { FormEvent, KeyboardEvent, useRef, useState } from "react";
-import { createConversation, jobEventsUrl, sendTextMessage } from "../../lib/api";
+import { ChangeEvent, FormEvent, KeyboardEvent, useRef, useState } from "react";
+import { createConversation, jobEventsUrl, sendImportMessage, sendTextMessage } from "../../lib/api";
 import styles from "./conversation-screen.module.css";
 
 type ConversationScreenProps = {
@@ -25,6 +27,7 @@ type TimelineItem =
   | { id: string; kind: "user"; text: string }
   | { id: string; kind: "question"; text: string }
   | { id: string; kind: "translation"; value: TranslationResult }
+  | { id: string; kind: "import"; value: GuideImportPreview }
   | { id: string; kind: "plan"; value: TripPlan };
 
 export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing: boolean): boolean {
@@ -48,28 +51,39 @@ export function ConversationScreen({
   placeholder,
 }: ConversationScreenProps) {
   const conversationId = useRef<string | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   const [input, setInput] = useState("");
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [images, setImages] = useState<string[]>([]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && images.length === 0) || busy) return;
+
+    await send(text, images);
+  }
+
+  async function send(text: string, attachedImages: string[] = []): Promise<void> {
 
     setBusy(true);
     setError("");
     setStatus("正在接收你的想法…");
     setInput("");
-    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text }]);
+    setImages([]);
+    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text: text || `已上传 ${attachedImages.length} 张攻略截图` }]);
 
     try {
       if (!conversationId.current) {
         conversationId.current = (await createConversation(mode)).id;
       }
-      const accepted = await sendTextMessage(conversationId.current, text, crypto.randomUUID());
+      const isImport = attachedImages.length > 0 || /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com)\//iu.test(text);
+      const accepted = isImport
+        ? await sendImportMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
+        : await sendTextMessage(conversationId.current, text, crypto.randomUUID());
       const stream = new EventSource(jobEventsUrl(accepted.jobId));
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
       stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
@@ -98,6 +112,12 @@ export function ConversationScreen({
         setTimeline((current) => [...current, { id: plan.versionId, kind: "plan", value: plan }]);
         setStatus("");
       });
+      stream.addEventListener("travel.import.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const preview = GuideImportPreviewSchema.parse(event.data.preview);
+        setTimeline((current) => [...current, { id: preview.id, kind: "import", value: preview }]);
+        setStatus("");
+      });
       stream.addEventListener("job.completed", () => {
         setBusy(false);
         stream.close();
@@ -119,6 +139,27 @@ export function ConversationScreen({
       setStatus("");
       setBusy(false);
     }
+  }
+
+  async function handleFiles(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const files = Array.from(event.target.files ?? []).slice(0, 4);
+    try {
+      setImages(await Promise.all(files.map(resizeImage)));
+      setError("");
+    } catch {
+      setError("图片读取失败，请选择 JPG、PNG 或 WebP 图片。");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function createPlanFromImport(preview: GuideImportPreview): Promise<void> {
+    const names = preview.items.filter((item) => item.verified).map((item) => item.place?.name ?? item.name);
+    if (names.length === 0) {
+      setError("没有可核验的地点，暂时无法生成行程。");
+      return;
+    }
+    await send(`请根据这些已核验的攻略地点生成行程：${names.join("、")}`);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
@@ -161,6 +202,18 @@ export function ConversationScreen({
               <p className={styles.translationDetail}>发音提示：{translation.pronunciation}</p>
             ) : null}
           </article>;
+          }
+          if (item.kind === "import") {
+            const preview = item.value;
+            const verified = preview.items.filter((value) => value.verified).length;
+            return <article className={styles.importCard} key={item.id}>
+              <p className={styles.translationLabel}>攻略解析完成</p>
+              <h2>识别到 {preview.items.length} 个地点</h2>
+              <p className={styles.importSummary}>已核验 {verified} 个 · 待确认 {preview.items.length - verified} 个{preview.failedSourceCount ? ` · ${preview.failedSourceCount} 个链接无法读取` : ""}</p>
+              {preview.needsFallback ? <p className={styles.importHint}>这个链接暂时无法直接读取，请上传攻略截图或粘贴正文。</p> : null}
+              <ul className={styles.importPlaces}>{preview.items.slice(0, 8).map((value, index) => <li key={`${value.name}-${index}`}><span>{value.place?.name ?? value.name}</span><small>{value.verified ? "已核验" : "待确认"}</small></li>)}</ul>
+              <button className={styles.importAction} type="button" disabled={busy || verified === 0} onClick={() => void createPlanFromImport(preview)}>生成行程</button>
+            </article>;
           }
           const plan = item.value;
           const weather = weatherText(plan);
@@ -213,6 +266,12 @@ export function ConversationScreen({
 
       <div className={styles.composerWrap}>
         <form className={styles.composer} onSubmit={submit}>
+          {mode === "TRAVEL" ? <>
+            <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void handleFiles(event)} />
+            <button className={styles.attach} type="button" aria-label="上传攻略截图" onClick={() => fileInput.current?.click()}>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+          </> : null}
           <label className={styles.visuallyHidden} htmlFor={`${mode}-message`}>输入内容</label>
           <textarea
             id={`${mode}-message`}
@@ -224,14 +283,34 @@ export function ConversationScreen({
             rows={1}
             maxLength={4_000}
           />
-          <button className={styles.send} type="submit" disabled={!input.trim() || busy} aria-label="发送">
+          <button className={styles.send} type="submit" disabled={(!input.trim() && images.length === 0) || busy} aria-label="发送">
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M12 19V5m0 0l-6 6m6-6l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </form>
+        {images.length > 0 ? <p className={styles.attachmentStatus}>已选择 {images.length} 张攻略截图</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
       </div>
     </main>
   );
+}
+
+function resizeImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.match(/^image\/(jpeg|png|webp)$/)) return reject(new Error("Unsupported image"));
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Invalid image")); };
+    image.src = url;
+  });
 }

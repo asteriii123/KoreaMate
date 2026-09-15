@@ -231,7 +231,7 @@
   min-height: 58px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: end;
   gap: 10px;
   padding: 8px 8px 8px 18px;
@@ -240,6 +240,42 @@
   background: var(--color-surface);
   box-shadow: 0 14px 40px rgb(15 23 42 / 12%);
 }
+
+.attach {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.attachmentStatus {
+  width: min(100%, 680px);
+  margin: 8px auto 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.importCard {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+}
+
+.importCard h2 { margin: 0; }
+.importSummary { color: var(--color-muted); line-height: 1.5; }
+.importHint { padding: 12px 14px; border-radius: 14px; background: var(--color-canvas); line-height: 1.5; }
+.importPlaces { list-style: none; margin: 18px 0; padding: 0; }
+.importPlaces li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+.importPlaces small { color: var(--color-muted); white-space: nowrap; }
+.importAction { min-height: 44px; padding: 0 18px; border: 0; border-radius: 22px; background: var(--color-action); color: var(--color-on-action); font-weight: 650; cursor: pointer; }
+.importAction:disabled { opacity: 0.38; cursor: default; }
 
 .input {
   min-height: 42px;

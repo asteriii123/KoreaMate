@@ -14,6 +14,7 @@ import { TRAVEL_PROVIDER, type TravelProvider } from "../src/modules/travel/trav
 import { KakaoPlaceProvider } from "../src/modules/places/kakao-place.provider.js";
 import { OpenMeteoWeatherProvider } from "../src/modules/travel/open-meteo-weather.provider.js";
 import { FrankfurterExchangeProvider } from "../src/modules/travel/frankfurter-exchange.provider.js";
+import { GuideImportService } from "../src/modules/travel/guide-import.service.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -70,6 +71,8 @@ describe("conversation persistence", () => {
       .useValue({ forecast: async (input: { startDate: string }) => ({ status: "available", source: "open-meteo", fetchedAt: "2026-09-15T00:00:00.000Z", days: [{ date: input.startDate, temperatureMin: 17, temperatureMax: 24, precipitationProbability: 35, weatherCode: 2 }] }) })
       .overrideProvider(FrankfurterExchangeProvider)
       .useValue({ latest: async () => ({ source: "frankfurter", base: "CNY", quote: "KRW", rate: 200, date: "2026-09-15", fetchedAt: "2026-09-15T00:00:00.000Z" }) })
+      .overrideProvider(GuideImportService)
+      .useValue({ parse: async () => ({ id: randomUUID(), sourceCount: 1, failedSourceCount: 0, needsFallback: false, items: [{ name: "景福宫", kind: "attraction", note: "古宫", verified: true, place: { id: randomUUID(), name: "경복궁", address: "서울 종로구", latitude: 37.5796, longitude: 126.9769, category: "文化遗产", provider: "kakao", sourceUrl: "https://place.map.kakao.com/1", fetchedAt: "2026-09-15T00:00:00.000Z", expiresAt: "2026-09-16T00:00:00.000Z" } }] }) })
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
@@ -214,5 +217,15 @@ describe("conversation persistence", () => {
     expect(restored.statusCode).toBe(201);
     expect(restored.json().versionNumber).toBe(3);
     expect(await prisma.tripVersion.count({ where: { tripId: trip?.id } })).toBe(3);
+  });
+
+  it("previews a screenshot import without creating a trip version", async () => {
+    const conversation = ConversationSchema.parse((await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode: "TRAVEL" } })).json());
+    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID() }, payload: { content: { type: "IMPORT", text: "", images: ["data:image/jpeg;base64,YQ=="] } } })).json());
+    const events = await (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
+    expect(events).toContain("event: travel.import.ready");
+    expect(events).not.toContain("event: travel.plan.ready");
+    const trip = await prisma.trip.findUnique({ where: { conversationId: conversation.id }, include: { versions: true } });
+    expect(trip?.versions).toHaveLength(0);
   });
 });

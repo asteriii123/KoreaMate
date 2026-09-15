@@ -43,6 +43,14 @@ export function sendTextMessage(
   );
 }
 
+export function sendImportMessage(conversationId: string, text: string, images: string[], idempotencyKey: string): Promise<AcceptedMessage> {
+  return requestJson(`/conversations/${conversationId}/messages`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ content: { type: "IMPORT", text, images } }),
+  }, (value) => AcceptedMessageSchema.parse(value));
+}
+
 export function jobEventsUrl(jobId: string): string {
   return `${API_URL}/jobs/${jobId}/events`;
 }

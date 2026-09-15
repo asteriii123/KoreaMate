@@ -56,6 +56,13 @@ export const ItineraryItemSchema = z.object({
   description: z.string().min(1),
   estimatedCost: z.number().nonnegative(),
   currency: z.string().length(3),
+  place: z.object({
+    name: z.string().min(1),
+    address: z.string().nullable(),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    mapUrl: z.url().nullable(),
+  }).nullable().default(null),
 });
 
 export const ItineraryDaySchema = z.object({

@@ -1,12 +1,13 @@
 import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../database/database.module.js";
+import { PlacesModule } from "../places/places.module.js";
 import { OpenAiCompatibleTravelProvider } from "./openai-compatible-travel.provider.js";
 import { TRAVEL_PROVIDER } from "./travel-provider.js";
 import { TravelService } from "./travel.service.js";
 import { TravelController } from "./travel.controller.js";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, PlacesModule],
   controllers: [TravelController],
   providers: [
     TravelService,

@@ -46,7 +46,7 @@ describe("conversation persistence", () => {
           requirements,
           title: "首尔两日轻旅行",
           summary: input.previousPlan ? "根据你的要求调整了节奏。" : "第一次去首尔也不费力。",
-          days: [1, 2].map((dayNumber) => ({ dayNumber, date: null, title: `首尔第 ${dayNumber} 天`, items: [{ time: "10:00", title: dayNumber === 1 ? "景福宫" : "圣水洞", description: "轻松逛逛", estimatedCost: 100 * dayNumber }] })),
+          days: [1, 2].map((dayNumber) => ({ dayNumber, date: null, title: `首尔第 ${dayNumber} 天`, items: [{ time: "10:00", title: dayNumber === 1 ? "景福宫" : "圣水洞", description: "轻松逛逛", estimatedCost: 100 * dayNumber, placeQuery: dayNumber === 1 ? "경복궁" : "성수동" }] })),
         };
       },
     };
@@ -196,6 +196,7 @@ describe("conversation persistence", () => {
     expect(Number(trip?.versions[0]?.totalCost)).toBe(300);
     expect(trip?.versions[0]?.days.map((day) => day.date?.toISOString().slice(0, 10))).toEqual(["2026-10-01", "2026-10-02"]);
     expect((await prisma.tripRequirement.findUnique({ where: { tripId: trip?.id } }))?.data).toMatchObject({ travelers: 3 });
+    expect(await prisma.itineraryItem.count({ where: { placeId: { not: null } } })).toBeGreaterThan(0);
 
     const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore` });
     expect(restored.statusCode).toBe(201);

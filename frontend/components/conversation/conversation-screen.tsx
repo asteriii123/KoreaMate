@@ -167,7 +167,16 @@ export function ConversationScreen({
                   {day.items.map((item) => (
                     <div className={styles.planItem} key={item.id}>
                       <time>{item.time}</time>
-                      <div><strong>{item.title}</strong><p>{item.description}</p></div>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.description}</p>
+                        {item.place ? (
+                          <div className={styles.placeMeta}>
+                            {item.place.address ? <span>{item.place.address}</span> : null}
+                            {item.place.mapUrl ? <a href={item.place.mapUrl} target="_blank" rel="noreferrer">地图</a> : null}
+                          </div>
+                        ) : null}
+                      </div>
                       <span>{item.estimatedCost > 0 ? `约 ${item.estimatedCost}` : "免费"}</span>
                     </div>
                   ))}

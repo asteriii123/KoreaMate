@@ -179,6 +179,22 @@
   line-height: 1.5;
 }
 
+.placeMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.placeMeta a {
+  color: var(--color-action);
+  font-weight: 650;
+  text-decoration: none;
+}
+
 .dayCost {
   margin-top: 16px;
   text-align: right;

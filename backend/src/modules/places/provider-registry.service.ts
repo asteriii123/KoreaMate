@@ -18,7 +18,7 @@ export class ProviderRegistryService {
   statuses(): ProviderStatus[] {
     return [
       { id: "kakao", configured: this.kakao.configured },
-      { id: "korea-tourism", configured: this.tourism.configured },
+      { id: "korea-tourism", configured: Boolean(process.env.KOREA_TOURISM_API_KEY && process.env.KOREA_TOURISM_MCP_URL) },
       { id: "naver", configured: Boolean(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET) },
       { id: "weather", configured: Boolean(process.env.WEATHER_MCP_URL) },
       { id: "exchange-rate", configured: Boolean(process.env.EXCHANGE_RATE_MCP_URL) },

@@ -20,6 +20,7 @@ const ProviderItemSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().trim().min(1),
   estimatedCost: z.number().nonnegative(),
+  placeQuery: z.union([z.string().trim().regex(/[가-힣]/), z.null()]),
 });
 
 const ProviderDaySchema = z.object({

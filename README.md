@@ -23,9 +23,12 @@ LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=你的模型名称
 
 KAKAO_REST_API_KEY=你的Kakao_REST_API_Key
+KAKAO_PROXY_URL=
 KOREA_TOURISM_API_KEY=你的韩国TourAPI_Key
 KOREA_TOURISM_MCP_URL=http://localhost:58000/mcp
 ```
+
+如果本机访问 Kakao 必须经过代理，可只在本地 `.env` 设置 `KAKAO_PROXY_URL`，例如 `http://127.0.0.1:7897`；服务器能够直连时保持为空。
 
 不要把 Key 写入 `.env.example`、源码或聊天记录。可通过下面的接口确认 Provider 是否已被识别：
 

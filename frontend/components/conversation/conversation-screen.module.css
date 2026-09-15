@@ -272,9 +272,12 @@
 .importSummary { color: var(--color-muted); line-height: 1.5; }
 .importHint { padding: 12px 14px; border-radius: 14px; background: var(--color-canvas); line-height: 1.5; }
 .importPlaces { list-style: none; margin: 18px 0; padding: 0; }
-.importPlaces li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+.importPlaces li { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--color-border); }
+.importPlaces label { min-height: 44px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.importPlaces input { width: 20px; height: 20px; accent-color: var(--color-action); }
 .importPlaces small { color: var(--color-muted); white-space: nowrap; }
-.importAction { min-height: 44px; padding: 0 18px; border: 0; border-radius: 22px; background: var(--color-action); color: var(--color-on-action); font-weight: 650; cursor: pointer; }
+.importMore { min-height: 44px; margin: -8px 0 12px; padding: 0; border: 0; background: transparent; color: var(--color-action); font-weight: 650; cursor: pointer; }
+.importAction { width: 100%; min-height: 48px; padding: 0 18px; border: 0; border-radius: 24px; background: var(--color-action); color: var(--color-on-action); font-weight: 650; cursor: pointer; }
 .importAction:disabled { opacity: 0.38; cursor: default; }
 
 .input {

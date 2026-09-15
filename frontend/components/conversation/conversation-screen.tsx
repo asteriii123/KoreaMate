@@ -58,6 +58,8 @@ export function ConversationScreen({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const [selectedImports, setSelectedImports] = useState<Record<string, number[]>>({});
+  const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({});
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -116,6 +118,7 @@ export function ConversationScreen({
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const preview = GuideImportPreviewSchema.parse(event.data.preview);
         setTimeline((current) => [...current, { id: preview.id, kind: "import", value: preview }]);
+        setSelectedImports((current) => ({ ...current, [preview.id]: preview.items.flatMap((item, index) => item.verified ? [index] : []) }));
         setStatus("");
       });
       stream.addEventListener("job.completed", () => {
@@ -154,12 +157,21 @@ export function ConversationScreen({
   }
 
   async function createPlanFromImport(preview: GuideImportPreview): Promise<void> {
-    const names = preview.items.filter((item) => item.verified).map((item) => item.place?.name ?? item.name);
+    const selected = new Set(selectedImports[preview.id] ?? []);
+    const names = preview.items.filter((item, index) => item.verified && selected.has(index)).map((item) => item.place?.name ?? item.name);
     if (names.length === 0) {
       setError("没有可核验的地点，暂时无法生成行程。");
       return;
     }
     await send(`请根据这些已核验的攻略地点生成行程：${names.join("、")}`);
+  }
+
+  function toggleImportItem(previewId: string, index: number): void {
+    setSelectedImports((current) => {
+      const selected = new Set(current[previewId] ?? []);
+      if (selected.has(index)) selected.delete(index); else selected.add(index);
+      return { ...current, [previewId]: [...selected] };
+    });
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
@@ -206,13 +218,22 @@ export function ConversationScreen({
           if (item.kind === "import") {
             const preview = item.value;
             const verified = preview.items.filter((value) => value.verified).length;
+            const selected = selectedImports[preview.id] ?? [];
+            const visibleItems = expandedImports[preview.id] ? preview.items : preview.items.slice(0, 8);
             return <article className={styles.importCard} key={item.id}>
               <p className={styles.translationLabel}>攻略解析完成</p>
               <h2>识别到 {preview.items.length} 个地点</h2>
               <p className={styles.importSummary}>已核验 {verified} 个 · 待确认 {preview.items.length - verified} 个{preview.failedSourceCount ? ` · ${preview.failedSourceCount} 个链接无法读取` : ""}</p>
               {preview.needsFallback ? <p className={styles.importHint}>这个链接暂时无法直接读取，请上传攻略截图或粘贴正文。</p> : null}
-              <ul className={styles.importPlaces}>{preview.items.slice(0, 8).map((value, index) => <li key={`${value.name}-${index}`}><span>{value.place?.name ?? value.name}</span><small>{value.verified ? "已核验" : "待确认"}</small></li>)}</ul>
-              <button className={styles.importAction} type="button" disabled={busy || verified === 0} onClick={() => void createPlanFromImport(preview)}>生成行程</button>
+              <ul className={styles.importPlaces}>{visibleItems.map((value, index) => <li key={`${value.name}-${index}`}>
+                <label>
+                  <input type="checkbox" checked={selected.includes(index)} disabled={!value.verified || busy} onChange={() => toggleImportItem(preview.id, index)} />
+                  <span>{value.place?.name ?? value.name}</span>
+                </label>
+                <small>{value.verified ? "已核验" : "待确认"}</small>
+              </li>)}</ul>
+              {preview.items.length > 8 ? <button className={styles.importMore} type="button" aria-expanded={Boolean(expandedImports[preview.id])} onClick={() => setExpandedImports((current) => ({ ...current, [preview.id]: !current[preview.id] }))}>{expandedImports[preview.id] ? "收起" : `查看全部 ${preview.items.length} 个地点`}</button> : null}
+              <button className={styles.importAction} type="button" disabled={busy || selected.length === 0} onClick={() => void createPlanFromImport(preview)}>用已选 {selected.length} 个地点生成行程</button>
             </article>;
           }
           const plan = item.value;

@@ -11,6 +11,7 @@ import {
   type TravelProvider,
 } from "./travel-provider.js";
 import { applyContextAnswer, inferPendingField } from "./context-answer.js";
+import { TripContextService, type TripContext } from "./trip-context.service.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -23,6 +24,7 @@ export class TravelService {
     private readonly prisma: PrismaService,
     @Inject(TRAVEL_PROVIDER) private readonly provider: TravelProvider,
     private readonly places: PlacesService,
+    private readonly tripContext: TripContextService,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -43,12 +45,13 @@ export class TravelService {
         : null;
       const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
+      const today = new Date().toISOString().slice(0, 10);
       const result = await this.provider.plan({
         message: job.text,
         requirements: contextualRequirements,
         previousPlan: previous ? this.toPreviousPlan(previous) : null,
         pendingField,
-        today: new Date().toISOString().slice(0, 10),
+        today,
       });
 
       const resolvedRequirements = pendingField && contextualRequirements?.[pendingField] != null
@@ -74,6 +77,8 @@ export class TravelService {
 
       const normalizedDays = this.normalizeDays(result.days, resolvedRequirements.startDate, resolvedRequirements.days);
       const days = await this.enrichDays(normalizedDays);
+      const firstPlace = days.flatMap((day) => day.items).find((item) => item.place)?.place ?? null;
+      const context = await this.tripContext.load({ tripId: trip.id, latitude: firstPlace?.latitude ?? null, longitude: firstPlace?.longitude ?? null, startDate: resolvedRequirements.startDate, tripDays: days.length, currency: resolvedRequirements.currency, today });
       const totalCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);
       const versionNumber = (previous?.versionNumber ?? 0) + 1;
       const version = await this.prisma.$transaction(async (transaction) => {
@@ -104,7 +109,7 @@ export class TravelService {
         return created;
       });
 
-      await this.appendEvent(job.jobId, "travel.plan.ready", { plan: this.toContract(trip.id, version) });
+      await this.appendEvent(job.jobId, "travel.plan.ready", { plan: this.toContract(trip.id, version, context) });
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_PLAN_READY" });
     } catch (error) {
       const notConfigured = error instanceof TravelProviderNotConfiguredError;
@@ -185,8 +190,8 @@ export class TravelService {
     return { title: version.title, summary: version.summary, currency: version.currency, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, items: day.items.map((item) => ({ time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost) })) })) };
   }
 
-  private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }): TripPlan {
-    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
+  private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }): TripPlan {
+    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

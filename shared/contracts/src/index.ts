@@ -73,6 +73,34 @@ export const ItineraryDaySchema = z.object({
   estimatedCost: z.number().nonnegative(),
 });
 
+export const WeatherContextSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("available"),
+    source: z.literal("open-meteo"),
+    fetchedAt: z.iso.datetime(),
+    days: z.array(z.object({
+      date: z.iso.date(),
+      temperatureMin: z.number(),
+      temperatureMax: z.number(),
+      precipitationProbability: z.number().min(0).max(100),
+      weatherCode: z.number().int(),
+    })).min(1).max(16),
+  }),
+  z.object({
+    status: z.literal("pending"),
+    reason: z.enum(["date_required", "outside_forecast_range"]),
+  }),
+]);
+
+export const ExchangeRateContextSchema = z.object({
+  source: z.literal("frankfurter"),
+  base: z.string().length(3),
+  quote: z.literal("KRW"),
+  rate: z.number().positive(),
+  date: z.iso.date(),
+  fetchedAt: z.iso.datetime(),
+});
+
 export const TripPlanSchema = z.object({
   tripId: z.uuid(),
   versionId: z.uuid(),
@@ -81,6 +109,8 @@ export const TripPlanSchema = z.object({
   summary: z.string().min(1),
   currency: z.string().length(3),
   totalEstimatedCost: z.number().nonnegative(),
+  weather: WeatherContextSchema.nullable().default(null),
+  exchangeRate: ExchangeRateContextSchema.nullable().default(null),
   days: z.array(ItineraryDaySchema).min(1),
 });
 
@@ -134,5 +164,7 @@ export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type TranslationResult = z.infer<typeof TranslationResultSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
+export type WeatherContext = z.infer<typeof WeatherContextSchema>;
+export type ExchangeRateContext = z.infer<typeof ExchangeRateContextSchema>;
 export type PlaceResult = z.infer<typeof PlaceResultSchema>;
 export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;

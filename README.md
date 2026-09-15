@@ -76,7 +76,11 @@ npm run build
 - 对话式旅行需求收集，支持简短上下文回答
 - 结构化逐日行程、预算校验、不可变版本与恢复
 - Kakao 地点 Provider
+- Open-Meteo 逐日天气（未来 16 天范围）
+- Frankfurter CNY/KRW 等每日参考汇率
 - 韩国 TourAPI MCP Provider
 - Provider 状态、调用审计、地点来源和有效期
 
 未配置的 Provider 会明确降级，不会生成伪造的实时数据。
+
+Open-Meteo 开放接口适合本地开发和非商业原型，并需要保留数据来源署名；公开商业服务应切换至其商业套餐或已获授权的天气 MCP。Frankfurter 返回的是参考汇率，不代表银行卡或换汇机构的实际成交价。

@@ -31,6 +31,15 @@ export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing:
   return key === "Enter" && !shiftKey && !isComposing;
 }
 
+function weatherText(plan: TripPlan): string | null {
+  if (!plan.weather) return null;
+  if (plan.weather.status === "pending") return plan.weather.reason === "date_required" ? "确定日期后更新天气" : "临近出发时更新天气";
+  const day = plan.weather.days[0];
+  if (!day) return null;
+  const rain = Math.max(...plan.weather.days.map((value) => value.precipitationProbability));
+  return `${Math.round(day.temperatureMin)}–${Math.round(day.temperatureMax)}°C · 降雨概率最高 ${rain}%`;
+}
+
 export function ConversationScreen({
   mode,
   title,
@@ -148,6 +157,7 @@ export function ConversationScreen({
           </article>;
           }
           const plan = item.value;
+          const weather = weatherText(plan);
           return <article className={styles.plan} key={item.id}>
             <div className={styles.planHeader}>
               <div>
@@ -157,6 +167,12 @@ export function ConversationScreen({
               <p className={styles.planCost}>约 {plan.totalEstimatedCost.toLocaleString()} {plan.currency}</p>
             </div>
             <p className={styles.planSummary}>{plan.summary}</p>
+            {weather || plan.exchangeRate ? (
+              <div className={styles.tripContext}>
+                {weather ? <span>{weather}</span> : null}
+                {plan.exchangeRate ? <span>1 {plan.exchangeRate.base} ≈ {plan.exchangeRate.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })} KRW · {plan.exchangeRate.date}</span> : null}
+              </div>
+            ) : null}
             <div className={styles.days}>
               {plan.days.map((day) => (
                 <section className={styles.day} key={day.dayNumber}>

@@ -63,8 +63,10 @@ describe("shared contracts", () => {
       summary: "轻松游览首尔。",
       currency: "CNY",
       totalEstimatedCost: 100,
+      weather: { status: "available", source: "open-meteo", fetchedAt: "2026-09-14T15:00:00.000Z", days: [{ date: "2026-10-01", temperatureMin: 12, temperatureMax: 20, precipitationProbability: 30, weatherCode: 2 }] },
+      exchangeRate: { source: "frankfurter", base: "CNY", quote: "KRW", rate: 193.2, date: "2026-09-14", fetchedAt: "2026-09-14T15:00:00.000Z" },
       days: [{ dayNumber: 1, date: "2026-10-01", title: "古宫散步", estimatedCost: 100, items: [{ id: "8ba7d65d-f8d2-481e-8d42-86651a835777", time: "10:00", title: "景福宫", description: "慢慢游览", estimatedCost: 100, currency: "CNY", place: { name: "경복궁", address: "서울 종로구 사직로 161", latitude: 37.5796, longitude: 126.9769, mapUrl: "https://place.map.kakao.com/1" } }] }],
-    }).days[0]?.items[0]?.place?.name).toBe("경복궁");
+    }).exchangeRate?.rate).toBe(193.2);
   });
 
   it("validates normalized place data with source freshness", () => {

@@ -139,6 +139,17 @@
   line-height: 1.6;
 }
 
+.tripContext {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-size: 0.86rem;
+}
+
 .days {
   display: grid;
   gap: 16px;

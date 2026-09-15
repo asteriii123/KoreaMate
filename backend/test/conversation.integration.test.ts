@@ -12,6 +12,8 @@ import {
 } from "../src/modules/translation/translation-provider.js";
 import { TRAVEL_PROVIDER, type TravelProvider } from "../src/modules/travel/travel-provider.js";
 import { KakaoPlaceProvider } from "../src/modules/places/kakao-place.provider.js";
+import { OpenMeteoWeatherProvider } from "../src/modules/travel/open-meteo-weather.provider.js";
+import { FrankfurterExchangeProvider } from "../src/modules/travel/frankfurter-exchange.provider.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -64,6 +66,10 @@ describe("conversation persistence", () => {
       .useValue(fakeTravelProvider)
       .overrideProvider(KakaoPlaceProvider)
       .useValue(fakeKakaoProvider)
+      .overrideProvider(OpenMeteoWeatherProvider)
+      .useValue({ forecast: async () => ({ status: "pending", reason: "outside_forecast_range" }) })
+      .overrideProvider(FrankfurterExchangeProvider)
+      .useValue({ latest: async () => ({ source: "frankfurter", base: "CNY", quote: "KRW", rate: 200, date: "2026-09-15", fetchedAt: "2026-09-15T00:00:00.000Z" }) })
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
@@ -197,6 +203,8 @@ describe("conversation persistence", () => {
     expect(trip?.versions[0]?.days.map((day) => day.date?.toISOString().slice(0, 10))).toEqual(["2026-10-01", "2026-10-02"]);
     expect((await prisma.tripRequirement.findUnique({ where: { tripId: trip?.id } }))?.data).toMatchObject({ travelers: 3 });
     expect(await prisma.itineraryItem.count({ where: { placeId: { not: null } } })).toBeGreaterThan(0);
+    expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "weather" } })).toBeGreaterThan(0);
+    expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "exchange-rate" } })).toBeGreaterThan(0);
 
     const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore` });
     expect(restored.statusCode).toBe(201);

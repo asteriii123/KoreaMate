@@ -15,6 +15,7 @@ import { KakaoPlaceProvider } from "../src/modules/places/kakao-place.provider.j
 import { OpenMeteoWeatherProvider } from "../src/modules/travel/open-meteo-weather.provider.js";
 import { FrankfurterExchangeProvider } from "../src/modules/travel/frankfurter-exchange.provider.js";
 import { GuideImportService } from "../src/modules/travel/guide-import.service.js";
+import { HotelMcpProvider } from "../src/modules/travel/hotel-mcp.provider.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -73,6 +74,8 @@ describe("conversation persistence", () => {
       .useValue({ latest: async () => ({ source: "frankfurter", base: "CNY", quote: "KRW", rate: 200, date: "2026-09-15", fetchedAt: "2026-09-15T00:00:00.000Z" }) })
       .overrideProvider(GuideImportService)
       .useValue({ parse: async () => ({ id: randomUUID(), sourceCount: 1, failedSourceCount: 0, needsFallback: false, items: [{ name: "景福宫", kind: "attraction", note: "古宫", verified: true, place: { id: randomUUID(), name: "경복궁", address: "서울 종로구", latitude: 37.5796, longitude: 126.9769, category: "文化遗产", provider: "kakao", sourceUrl: "https://place.map.kakao.com/1", fetchedAt: "2026-09-15T00:00:00.000Z", expiresAt: "2026-09-16T00:00:00.000Z" } }] }) })
+      .overrideProvider(HotelMcpProvider)
+      .useValue({ configured: true, search: async (input: { destination: string; checkIn: string; checkOut: string }) => ({ provider: "rollinggo-hotel", destination: input.destination, checkIn: input.checkIn, checkOut: input.checkOut, fetchedAt: "2026-09-15T00:00:00.000Z", hotels: [{ id: "5956", name: "里维埃拉酒店", starRating: 4, lowestPrice: 1017, currency: "CNY", address: "首尔江南区", imageUrl: null, bookingUrl: "https://rollinggo.cn/hotel/5956", recommendation: "性价比之选", cancellation: "免费取消" }] }) })
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");
@@ -202,6 +205,9 @@ describe("conversation persistence", () => {
     expect(weatherEvents).toContain("event: travel.answer");
     expect(weatherEvents).toContain("17–24°C");
     expect(weatherEvents).not.toContain("event: travel.plan.ready");
+    const hotelEvents = await send("这次住什么酒店合适？");
+    expect(hotelEvents).toContain("event: travel.hotel.ready");
+    expect(hotelEvents).not.toContain("event: travel.plan.ready");
 
     const trip = await prisma.trip.findUnique({ where: { conversationId: conversation.id }, include: { versions: { orderBy: { versionNumber: "asc" }, include: { days: true } } } });
     expect(trip?.versions).toHaveLength(2);
@@ -212,6 +218,7 @@ describe("conversation persistence", () => {
     expect(await prisma.itineraryItem.count({ where: { placeId: { not: null } } })).toBeGreaterThan(0);
     expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "weather" } })).toBeGreaterThan(0);
     expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "exchange-rate" } })).toBeGreaterThan(0);
+    expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "hotel" } })).toBeGreaterThan(0);
 
     const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore` });
     expect(restored.statusCode).toBe(201);

@@ -3,12 +3,15 @@
 import {
   JobEventSchema,
   GuideImportPreviewSchema,
+  HotelSearchResultSchema,
   TranslationResultSchema,
   TripPlanSchema,
   type ConversationMode,
   type TranslationResult,
   type TripPlan,
   type GuideImportPreview,
+  type HotelOption,
+  type HotelSearchResult,
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useRef, useState } from "react";
@@ -28,6 +31,7 @@ type TimelineItem =
   | { id: string; kind: "question"; text: string }
   | { id: string; kind: "translation"; value: TranslationResult }
   | { id: string; kind: "import"; value: GuideImportPreview }
+  | { id: string; kind: "hotels"; value: HotelSearchResult }
   | { id: string; kind: "plan"; value: TripPlan };
 
 export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing: boolean): boolean {
@@ -123,6 +127,12 @@ export function ConversationScreen({
         const preview = GuideImportPreviewSchema.parse(event.data.preview);
         setTimeline((current) => [...current, { id: preview.id, kind: "import", value: preview }]);
         setSelectedImports((current) => ({ ...current, [preview.id]: preview.items.flatMap((item, index) => item.verified ? [index] : []) }));
+        setStatus("");
+      });
+      stream.addEventListener("travel.hotel.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const result = HotelSearchResultSchema.parse(event.data.result);
+        setTimeline((current) => [...current, { id: event.eventId, kind: "hotels", value: result }]);
         setStatus("");
       });
       stream.addEventListener("job.completed", () => {
@@ -243,6 +253,7 @@ export function ConversationScreen({
               <button className={styles.importAction} type="button" disabled={busy || selected.length === 0} onClick={() => void createPlanFromImport(preview)}>用已选 {selected.length} 个地点生成行程</button>
             </article>;
           }
+          if (item.kind === "hotels") return <HotelCards key={item.id} hotels={item.value.hotels} title={`${item.value.destination}住宿候选`} />;
           const plan = item.value;
           const weather = weatherText(plan);
           return <article className={styles.plan} key={item.id}>
@@ -260,6 +271,7 @@ export function ConversationScreen({
                 {plan.exchangeRate ? <span>1 {plan.exchangeRate.base} ≈ {plan.exchangeRate.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })} KRW · {plan.exchangeRate.date}</span> : null}
               </div>
             ) : null}
+            {plan.hotels.length > 0 ? <HotelCards hotels={plan.hotels} title="住宿候选" embedded /> : null}
             <div className={styles.days}>
               {plan.days.map((day) => (
                 <section className={styles.day} key={day.dayNumber}>
@@ -341,4 +353,17 @@ function resizeImage(file: File): Promise<string> {
     image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Invalid image")); };
     image.src = url;
   });
+}
+
+function HotelCards({ hotels, title, embedded = false }: { hotels: HotelOption[]; title: string; embedded?: boolean }) {
+  return <section className={embedded ? styles.hotelSection : styles.hotelCard}>
+    <p className={styles.translationLabel}>实时酒店参考</p>
+    <h2>{title}</h2>
+    <div className={styles.hotelList}>{hotels.slice(0, 3).map((hotel) => <article key={hotel.id} className={styles.hotelItem}>
+      <div><strong>{hotel.name}</strong><p>{hotel.starRating ? `${hotel.starRating} 星 · ` : ""}{hotel.recommendation || hotel.address}</p></div>
+      <div className={styles.hotelPrice}><strong>约 {hotel.lowestPrice.toLocaleString()} {hotel.currency}</strong><span>每晚起</span></div>
+      {hotel.bookingUrl ? <a href={hotel.bookingUrl} target="_blank" rel="noreferrer">查看房型</a> : null}
+    </article>)}</div>
+    <p className={styles.hotelNotice}>价格与房态来自第三方，预订前请在跳转页面再次确认。</p>
+  </section>;
 }

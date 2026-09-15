@@ -283,6 +283,32 @@
 .importAction { width: 100%; min-height: 48px; padding: 0 18px; border: 0; border-radius: 24px; background: var(--color-action); color: var(--color-on-action); font-weight: 650; cursor: pointer; }
 .importAction:disabled { opacity: 0.38; cursor: default; }
 
+.hotelCard,
+.hotelSection {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+}
+
+.hotelSection { padding: 20px; background: var(--color-canvas); }
+.hotelCard h2,
+.hotelSection h2 { margin: 0; }
+.hotelList { display: grid; gap: 10px; margin-top: 18px; }
+.hotelItem { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; padding: 16px; border-radius: 16px; background: var(--color-canvas); }
+.hotelSection .hotelItem { background: var(--color-surface); }
+.hotelItem p { margin: 5px 0 0; color: var(--color-muted); font-size: 0.85rem; line-height: 1.45; }
+.hotelItem a { grid-column: 1 / -1; min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: var(--color-action); color: var(--color-on-action); font-weight: 650; text-decoration: none; }
+.hotelPrice { display: grid; align-content: start; justify-items: end; white-space: nowrap; }
+.hotelPrice span { color: var(--color-muted); font-size: 0.75rem; }
+.hotelNotice { margin: 14px 0 0; color: var(--color-muted); font-size: 0.78rem; line-height: 1.5; }
+
+@media (max-width: 540px) {
+  .hotelItem { grid-template-columns: 1fr; }
+  .hotelPrice { justify-items: start; }
+}
+
 .input {
   min-height: 42px;
   max-height: 144px;

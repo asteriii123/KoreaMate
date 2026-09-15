@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { PlaceResult, TripPlan } from "@koreamate/contracts";
+import type { HotelOption, PlaceResult, TripPlan } from "@koreamate/contracts";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { PlacesService } from "../places/places.service.js";
@@ -13,6 +13,7 @@ import {
 import { applyContextAnswer, inferPendingField } from "./context-answer.js";
 import { TripContextService, type TripContext } from "./trip-context.service.js";
 import { GuideImportService } from "./guide-import.service.js";
+import { HotelMcpProvider } from "./hotel-mcp.provider.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -27,6 +28,7 @@ export class TravelService {
     private readonly places: PlacesService,
     private readonly tripContext: TripContextService,
     private readonly guideImport: GuideImportService,
+    private readonly hotels: HotelMcpProvider,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -57,6 +59,10 @@ export class TravelService {
       }
       if (previous && this.isWeatherQuestion(job.text)) {
         await this.answerWeatherQuestion(job, trip.id, requirements?.destination ?? null, today);
+        return;
+      }
+      if (this.isHotelQuestion(job.text)) {
+        await this.answerHotelQuestion(job, trip.id, requirements);
         return;
       }
       const result = await this.provider.plan({
@@ -92,6 +98,9 @@ export class TravelService {
       const days = await this.enrichDays(normalizedDays);
       const firstPlace = days.flatMap((day) => day.items).find((item) => item.place)?.place ?? null;
       const context = await this.tripContext.load({ tripId: trip.id, latitude: firstPlace?.latitude ?? null, longitude: firstPlace?.longitude ?? null, startDate: resolvedRequirements.startDate, tripDays: days.length, currency: resolvedRequirements.currency, today });
+      const hotelOptions = resolvedRequirements.destination && resolvedRequirements.startDate
+        ? await this.loadHotels(trip.id, resolvedRequirements.destination, resolvedRequirements.startDate, this.addDays(resolvedRequirements.startDate, Math.max(1, days.length - 1)), resolvedRequirements.travelers ?? 1, job.text)
+        : [];
       const totalCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);
       const versionNumber = (previous?.versionNumber ?? 0) + 1;
       const version = await this.prisma.$transaction(async (transaction) => {
@@ -122,7 +131,7 @@ export class TravelService {
         return created;
       });
 
-      await this.appendEvent(job.jobId, "travel.plan.ready", { plan: this.toContract(trip.id, version, context) });
+      await this.appendEvent(job.jobId, "travel.plan.ready", { plan: this.toContract(trip.id, version, context, hotelOptions.slice(0, 3)) });
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_PLAN_READY" });
     } catch (error) {
       const notConfigured = error instanceof TravelProviderNotConfiguredError;
@@ -197,6 +206,47 @@ export class TravelService {
     return /(天气|气温|温度|下雨|降雨|带伞|冷不冷|热不热)/u.test(text);
   }
 
+  private isHotelQuestion(text: string): boolean {
+    return /(酒店|住宿|住哪里|住哪儿|民宿)/u.test(text);
+  }
+
+  private async answerHotelQuestion(job: TravelJob, tripId: string, requirements: { destination: string | null; startDate: string | null; days: number | null; travelers: number | null } | null): Promise<void> {
+    if (!requirements?.destination || !requirements.startDate) {
+      const answer = "告诉我入住城市和日期，我就能查询实时酒店。";
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
+      await this.appendEvent(job.jobId, "travel.answer", { answer });
+      await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
+      return;
+    }
+    const checkOut = this.addDays(requirements.startDate, Math.max(1, (requirements.days ?? 2) - 1));
+    const hotels = await this.loadHotels(tripId, requirements.destination, requirements.startDate, checkOut, requirements.travelers ?? 1, job.text);
+    if (hotels.length === 0) {
+      const answer = "酒店实时查询暂时不可用，现有行程没有被修改。";
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
+      await this.appendEvent(job.jobId, "travel.answer", { answer });
+    } else {
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { hotels } } });
+      await this.appendEvent(job.jobId, "travel.hotel.ready", { result: { provider: "rollinggo-hotel", destination: requirements.destination, checkIn: requirements.startDate, checkOut, fetchedAt: new Date().toISOString(), hotels } });
+    }
+    await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_HOTEL_READY" });
+  }
+
+  private async loadHotels(tripId: string, destination: string, checkIn: string, checkOut: string, guests: number, query: string): Promise<HotelOption[]> {
+    if (!this.hotels.configured) return [];
+    const startedAt = Date.now();
+    try {
+      const result = await this.hotels.search({ destination, checkIn, checkOut, guests, query });
+      await this.prisma.$transaction([
+        this.prisma.tripResource.create({ data: { tripId, kind: "hotel", provider: result.provider, query: { destination, checkIn, checkOut, guests }, data: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue, expiresAt: new Date(Date.now() + 30 * 60 * 1_000) } }),
+        this.prisma.providerCall.create({ data: { provider: result.provider, operation: "hotel.search", status: "SUCCEEDED", durationMs: Date.now() - startedAt, request: { destination, checkIn, checkOut, guests }, response: { resultCount: result.hotels.length } } }),
+      ]);
+      return result.hotels;
+    } catch {
+      await this.prisma.providerCall.create({ data: { provider: "rollinggo-hotel", operation: "hotel.search", status: "FAILED", durationMs: Date.now() - startedAt, errorCode: "PROVIDER_FAILED", request: { destination, checkIn, checkOut, guests } } });
+      return [];
+    }
+  }
+
   private hasGuideUrl(text: string): boolean {
     return /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.(?:cn|com))\//iu.test(text);
   }
@@ -236,8 +286,8 @@ export class TravelService {
     return { title: version.title, summary: version.summary, currency: version.currency, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, items: day.items.map((item) => ({ time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost) })) })) };
   }
 
-  private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }): TripPlan {
-    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
+  private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }, hotels: HotelOption[] = []): TripPlan {
+    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

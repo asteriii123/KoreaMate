@@ -41,6 +41,7 @@ export const JobEventTypeSchema = z.enum([
   "travel.question",
   "travel.answer",
   "travel.import.ready",
+  "travel.hotel.ready",
   "travel.plan.ready",
   "job.completed",
   "job.failed",
@@ -109,6 +110,28 @@ export const ExchangeRateContextSchema = z.object({
   fetchedAt: z.iso.datetime(),
 });
 
+export const HotelOptionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  starRating: z.number().min(0).max(5).nullable(),
+  lowestPrice: z.number().nonnegative(),
+  currency: z.string().length(3),
+  address: z.string().nullable(),
+  imageUrl: z.url().nullable(),
+  bookingUrl: z.url().nullable(),
+  recommendation: z.string(),
+  cancellation: z.string(),
+});
+
+export const HotelSearchResultSchema = z.object({
+  provider: z.literal("rollinggo-hotel"),
+  destination: z.string().min(1),
+  checkIn: z.iso.date(),
+  checkOut: z.iso.date(),
+  fetchedAt: z.iso.datetime(),
+  hotels: z.array(HotelOptionSchema).max(6),
+});
+
 export const TripPlanSchema = z.object({
   tripId: z.uuid(),
   versionId: z.uuid(),
@@ -119,6 +142,7 @@ export const TripPlanSchema = z.object({
   totalEstimatedCost: z.number().nonnegative(),
   weather: WeatherContextSchema.nullable().default(null),
   exchangeRate: ExchangeRateContextSchema.nullable().default(null),
+  hotels: z.array(HotelOptionSchema).max(3).default([]),
   days: z.array(ItineraryDaySchema).min(1),
 });
 
@@ -189,5 +213,7 @@ export type TranslationResult = z.infer<typeof TranslationResultSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
 export type WeatherContext = z.infer<typeof WeatherContextSchema>;
 export type ExchangeRateContext = z.infer<typeof ExchangeRateContextSchema>;
+export type HotelOption = z.infer<typeof HotelOptionSchema>;
+export type HotelSearchResult = z.infer<typeof HotelSearchResultSchema>;
 export type PlaceResult = z.infer<typeof PlaceResultSchema>;
 export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;

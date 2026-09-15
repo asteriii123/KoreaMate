@@ -219,9 +219,9 @@ describe("conversation persistence", () => {
     expect(await prisma.tripVersion.count({ where: { tripId: trip?.id } })).toBe(3);
   });
 
-  it("previews a screenshot import without creating a trip version", async () => {
+  it("previews an xhslink.cn guide without creating a trip version", async () => {
     const conversation = ConversationSchema.parse((await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode: "TRAVEL" } })).json());
-    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID() }, payload: { content: { type: "IMPORT", text: "", images: ["data:image/jpeg;base64,YQ=="] } } })).json());
+    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID() }, payload: { content: { type: "TEXT", text: "https://xhslink.cn/o/example" } } })).json());
     const events = await (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
     expect(events).toContain("event: travel.import.ready");
     expect(events).not.toContain("event: travel.plan.ready");

@@ -39,7 +39,7 @@ export class GuideImportService {
       items.push({ name: item.name, kind: item.kind, note: item.note, verified: place !== null, place });
     }
     const id = crypto.randomUUID();
-    const preview = GuideImportPreviewSchema.parse({ id, sourceCount: urls.length + input.images.length, failedSourceCount, needsFallback: items.length === 0 && failedSourceCount > 0 && input.images.length === 0, items });
+    const preview = GuideImportPreviewSchema.parse({ id, sourceCount: urls.length + input.images.length, failedSourceCount, needsFallback: items.length === 0 && urls.length > 0 && input.images.length === 0, items });
     await this.prisma.tripResource.create({
       data: { tripId: input.tripId, kind: "guide-import", provider: "llm+kakao", query: { urls, imageCount: input.images.length }, data: JSON.parse(JSON.stringify(preview)) as Prisma.InputJsonValue, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000) },
     });
@@ -67,7 +67,7 @@ export class GuideImportService {
   private isAllowedUrl(value: string): boolean {
     try {
       const hostname = new URL(value).hostname.toLowerCase();
-      return hostname === "xiaohongshu.com" || hostname.endsWith(".xiaohongshu.com") || hostname === "xhslink.com" || hostname.endsWith(".xhslink.com");
+      return hostname === "xiaohongshu.com" || hostname.endsWith(".xiaohongshu.com") || hostname === "xhslink.cn" || hostname.endsWith(".xhslink.cn") || hostname === "xhslink.com" || hostname.endsWith(".xhslink.com");
     } catch { return false; }
   }
 

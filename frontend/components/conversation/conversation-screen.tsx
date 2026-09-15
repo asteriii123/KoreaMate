@@ -34,6 +34,10 @@ export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing:
   return key === "Enter" && !shiftKey && !isComposing;
 }
 
+export function isGuideImport(text: string, imageCount: number): boolean {
+  return imageCount > 0 || /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.(?:cn|com))\//iu.test(text);
+}
+
 function weatherText(plan: TripPlan): string | null {
   if (!plan.weather) return null;
   if (plan.weather.status === "pending") return plan.weather.reason === "date_required" ? "确定日期后更新天气" : "临近出发时更新天气";
@@ -82,7 +86,7 @@ export function ConversationScreen({
       if (!conversationId.current) {
         conversationId.current = (await createConversation(mode)).id;
       }
-      const isImport = attachedImages.length > 0 || /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com)\//iu.test(text);
+      const isImport = isGuideImport(text, attachedImages.length);
       const accepted = isImport
         ? await sendImportMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
         : await sendTextMessage(conversationId.current, text, crypto.randomUUID());

@@ -198,7 +198,7 @@ export class TravelService {
   }
 
   private hasGuideUrl(text: string): boolean {
-    return /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.com)\//iu.test(text);
+    return /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.(?:cn|com))\//iu.test(text);
   }
 
   private async answerWeatherQuestion(job: TravelJob, tripId: string, currentDestination: string | null, today: string): Promise<void> {

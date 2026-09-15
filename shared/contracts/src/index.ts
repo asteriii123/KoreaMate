@@ -33,6 +33,7 @@ export const JobEventTypeSchema = z.enum([
   "translation.ready",
   "travel.started",
   "travel.question",
+  "travel.answer",
   "travel.plan.ready",
   "job.completed",
   "job.failed",

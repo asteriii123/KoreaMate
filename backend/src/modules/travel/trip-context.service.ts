@@ -22,6 +22,11 @@ export class TripContextService {
     return { weather, exchangeRate };
   }
 
+  async loadWeather(input: { tripId: string; latitude: number; longitude: number; date: string; today: string }): Promise<WeatherContext | null> {
+    return this.capture(input.tripId, "weather", "open-meteo", { latitude: input.latitude, longitude: input.longitude, startDate: input.date, tripDays: 1 }, 60 * 60 * 1_000,
+      () => this.weather.forecast({ latitude: input.latitude, longitude: input.longitude, startDate: input.date, tripDays: 1, today: input.today }));
+  }
+
   private async capture<T>(tripId: string, kind: string, provider: string, query: Prisma.InputJsonValue, ttlMs: number, request: () => Promise<T>): Promise<T | null> {
     const startedAt = Date.now();
     try {

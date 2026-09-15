@@ -67,7 +67,7 @@ describe("conversation persistence", () => {
       .overrideProvider(KakaoPlaceProvider)
       .useValue(fakeKakaoProvider)
       .overrideProvider(OpenMeteoWeatherProvider)
-      .useValue({ forecast: async () => ({ status: "pending", reason: "outside_forecast_range" }) })
+      .useValue({ forecast: async (input: { startDate: string }) => ({ status: "available", source: "open-meteo", fetchedAt: "2026-09-15T00:00:00.000Z", days: [{ date: input.startDate, temperatureMin: 17, temperatureMax: 24, precipitationProbability: 35, weatherCode: 2 }] }) })
       .overrideProvider(FrankfurterExchangeProvider)
       .useValue({ latest: async () => ({ source: "frankfurter", base: "CNY", quote: "KRW", rate: 200, date: "2026-09-15", fetchedAt: "2026-09-15T00:00:00.000Z" }) })
       .compile();
@@ -195,6 +195,10 @@ describe("conversation persistence", () => {
     const firstPlanEvents = await send("3");
     expect(firstPlanEvents).toContain("event: travel.plan.ready");
     expect(await send("第二天轻松一点")).toContain("event: travel.plan.ready");
+    const weatherEvents = await send("今天天气如何");
+    expect(weatherEvents).toContain("event: travel.answer");
+    expect(weatherEvents).toContain("17–24°C");
+    expect(weatherEvents).not.toContain("event: travel.plan.ready");
 
     const trip = await prisma.trip.findUnique({ where: { conversationId: conversation.id }, include: { versions: { orderBy: { versionNumber: "asc" }, include: { days: true } } } });
     expect(trip?.versions).toHaveLength(2);

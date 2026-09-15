@@ -86,6 +86,12 @@ export function ConversationScreen({
         setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: question }]);
         setStatus("");
       });
+      stream.addEventListener("travel.answer", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const answer = typeof event.data.answer === "string" ? event.data.answer : "暂时无法回答这个问题。";
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: answer }]);
+        setStatus("");
+      });
       stream.addEventListener("travel.plan.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const plan = TripPlanSchema.parse(event.data.plan);

@@ -46,6 +46,10 @@ export class TravelService {
       const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
       const today = new Date().toISOString().slice(0, 10);
+      if (previous && this.isWeatherQuestion(job.text)) {
+        await this.answerWeatherQuestion(job, trip.id, requirements?.destination ?? null, today);
+        return;
+      }
       const result = await this.provider.plan({
         message: job.text,
         requirements: contextualRequirements,
@@ -178,6 +182,35 @@ export class TravelService {
 
   private isPlaceActivity(title: string): boolean {
     return !/^(步行|散步|乘坐|搭乘|前往|返回|出发|抵达|休息|自由活动|办理入住|办理退房|交通|早餐|午餐|晚餐)(\b|：|:|到|至|前往)?/u.test(title.trim());
+  }
+
+  private isWeatherQuestion(text: string): boolean {
+    return /(天气|气温|温度|下雨|降雨|带伞|冷不冷|热不热)/u.test(text);
+  }
+
+  private async answerWeatherQuestion(job: TravelJob, tripId: string, currentDestination: string | null, today: string): Promise<void> {
+    const explicitDestination = job.text.match(/(?:今天|明天|后天)?\s*([\p{Script=Han}]{2,12}?(?:市|岛|道|区)|首尔|釜山|济州|仁川|大邱|大田|光州|蔚山)(?=.{0,4}(?:天气|气温|温度|下雨|降雨|带伞|冷不冷|热不热))/u)?.[1] ?? null;
+    const destination = explicitDestination ?? currentDestination;
+    const offset = job.text.includes("后天") ? 2 : job.text.includes("明天") ? 1 : 0;
+    const date = this.addDays(today, offset);
+    let answer: string;
+    if (!destination) {
+      answer = "请告诉我想查询韩国哪个城市的天气。";
+    } else {
+      const place = await this.places.search(destination, "kakao").then((results) => results[0] ?? null).catch(() => null);
+      const weather = place
+        ? await this.tripContext.loadWeather({ tripId, latitude: place.latitude, longitude: place.longitude, date, today })
+        : null;
+      const day = weather?.status === "available" ? weather.days[0] : null;
+      answer = day
+        ? `${destination}${offset === 0 ? "今天" : offset === 1 ? "明天" : "后天"} ${Math.round(day.temperatureMin)}–${Math.round(day.temperatureMax)}°C，降雨概率 ${Math.round(day.precipitationProbability)}%。${day.precipitationProbability >= 40 ? "建议带伞。" : "目前降雨可能性不高。"}`
+        : `暂时无法获取${destination}的实时天气，请稍后再试。`;
+    }
+    await this.prisma.message.create({
+      data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } },
+    });
+    await this.appendEvent(job.jobId, "travel.answer", { answer });
+    await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
   }
 
   private addDays(isoDate: string, amount: number): string {

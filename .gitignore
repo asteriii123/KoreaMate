@@ -2,6 +2,10 @@
 node_modules/
 .venv-ocr/
 .venv-whisper/
+.venv-embedding/
+.modelscope-cache/
+__pycache__/
+*.pyc
 
 # Builds and test artifacts
 dist/

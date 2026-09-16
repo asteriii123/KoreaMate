@@ -303,10 +303,18 @@
 .hotelPrice { display: grid; align-content: start; justify-items: end; white-space: nowrap; }
 .hotelPrice span { color: var(--color-muted); font-size: 0.75rem; }
 .hotelNotice { margin: 14px 0 0; color: var(--color-muted); font-size: 0.78rem; line-height: 1.5; }
+.flightItem { display: grid; grid-template-columns: 1fr 1.4fr auto; align-items: center; gap: 12px 18px; padding: 16px; border-radius: 16px; background: var(--color-canvas); }
+.hotelSection .flightItem { background: var(--color-surface); }
+.flightRoute { display: grid; gap: 4px; }
+.flightRoute span,
+.flightTimes span { color: var(--color-muted); font-size: 0.78rem; }
+.flightTimes { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.flightTimes span { text-align: center; border-bottom: 1px solid var(--color-border); }
 
 @media (max-width: 540px) {
   .hotelItem { grid-template-columns: 1fr; }
   .hotelPrice { justify-items: start; }
+  .flightItem { grid-template-columns: 1fr; }
 }
 
 .input {

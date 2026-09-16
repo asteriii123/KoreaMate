@@ -11,6 +11,7 @@ import { TripContextService } from "./trip-context.service.js";
 import { GuideImportService } from "./guide-import.service.js";
 import { RemoteMcpClientService } from "./remote-mcp-client.service.js";
 import { HotelMcpProvider } from "./hotel-mcp.provider.js";
+import { FlightMcpProvider } from "./flight-mcp.provider.js";
 
 @Module({
   imports: [DatabaseModule, PlacesModule],
@@ -20,6 +21,7 @@ import { HotelMcpProvider } from "./hotel-mcp.provider.js";
     GuideImportService,
     RemoteMcpClientService,
     HotelMcpProvider,
+    FlightMcpProvider,
     TripContextService,
     OpenMeteoWeatherProvider,
     FrankfurterExchangeProvider,

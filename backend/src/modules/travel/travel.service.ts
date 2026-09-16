@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { HotelOption, PlaceResult, TripPlan } from "@koreamate/contracts";
+import type { FlightOption, HotelOption, PlaceResult, TripPlan } from "@koreamate/contracts";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { PlacesService } from "../places/places.service.js";
@@ -14,6 +14,7 @@ import { applyContextAnswer, inferPendingField } from "./context-answer.js";
 import { TripContextService, type TripContext } from "./trip-context.service.js";
 import { GuideImportService } from "./guide-import.service.js";
 import { HotelMcpProvider } from "./hotel-mcp.provider.js";
+import { FlightMcpProvider } from "./flight-mcp.provider.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -29,6 +30,7 @@ export class TravelService {
     private readonly tripContext: TripContextService,
     private readonly guideImport: GuideImportService,
     private readonly hotels: HotelMcpProvider,
+    private readonly flights: FlightMcpProvider,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -65,6 +67,10 @@ export class TravelService {
         await this.answerHotelQuestion(job, trip.id, requirements);
         return;
       }
+      if (this.isFlightQuestion(job.text)) {
+        await this.answerFlightQuestion(job, trip.id, requirements);
+        return;
+      }
       const result = await this.provider.plan({
         message: job.text,
         requirements: contextualRequirements,
@@ -98,9 +104,14 @@ export class TravelService {
       const days = await this.enrichDays(normalizedDays);
       const firstPlace = days.flatMap((day) => day.items).find((item) => item.place)?.place ?? null;
       const context = await this.tripContext.load({ tripId: trip.id, latitude: firstPlace?.latitude ?? null, longitude: firstPlace?.longitude ?? null, startDate: resolvedRequirements.startDate, tripDays: days.length, currency: resolvedRequirements.currency, today });
-      const hotelOptions = resolvedRequirements.destination && resolvedRequirements.startDate
-        ? await this.loadHotels(trip.id, resolvedRequirements.destination, resolvedRequirements.startDate, this.addDays(resolvedRequirements.startDate, Math.max(1, days.length - 1)), resolvedRequirements.travelers ?? 1, job.text)
-        : [];
+      const [hotelOptions, flightOptions] = await Promise.all([
+        resolvedRequirements.destination && resolvedRequirements.startDate
+          ? this.loadHotels(trip.id, resolvedRequirements.destination, resolvedRequirements.startDate, this.addDays(resolvedRequirements.startDate, Math.max(1, days.length - 1)), resolvedRequirements.travelers ?? 1, job.text)
+          : Promise.resolve([]),
+        resolvedRequirements.departureCity && resolvedRequirements.destination && resolvedRequirements.startDate
+          ? this.loadFlights(trip.id, resolvedRequirements.departureCity, resolvedRequirements.destination, resolvedRequirements.startDate)
+          : Promise.resolve([]),
+      ]);
       const totalCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);
       const versionNumber = (previous?.versionNumber ?? 0) + 1;
       const version = await this.prisma.$transaction(async (transaction) => {
@@ -131,7 +142,7 @@ export class TravelService {
         return created;
       });
 
-      await this.appendEvent(job.jobId, "travel.plan.ready", { plan: this.toContract(trip.id, version, context, hotelOptions.slice(0, 3)) });
+      await this.appendEvent(job.jobId, "travel.plan.ready", { plan: this.toContract(trip.id, version, context, hotelOptions.slice(0, 3), flightOptions.slice(0, 3)) });
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_PLAN_READY" });
     } catch (error) {
       const notConfigured = error instanceof TravelProviderNotConfiguredError;
@@ -210,6 +221,10 @@ export class TravelService {
     return /(酒店|住宿|住哪里|住哪儿|民宿)/u.test(text);
   }
 
+  private isFlightQuestion(text: string): boolean {
+    return /(航班|机票|飞机票|直飞|转机)/u.test(text);
+  }
+
   private async answerHotelQuestion(job: TravelJob, tripId: string, requirements: { destination: string | null; startDate: string | null; days: number | null; travelers: number | null } | null): Promise<void> {
     if (!requirements?.destination || !requirements.startDate) {
       const answer = "告诉我入住城市和日期，我就能查询实时酒店。";
@@ -243,6 +258,43 @@ export class TravelService {
       return result.hotels;
     } catch {
       await this.prisma.providerCall.create({ data: { provider: "rollinggo-hotel", operation: "hotel.search", status: "FAILED", durationMs: Date.now() - startedAt, errorCode: "PROVIDER_FAILED", request: { destination, checkIn, checkOut, guests } } });
+      return [];
+    }
+  }
+
+  private async answerFlightQuestion(job: TravelJob, tripId: string, requirements: { departureCity: string | null; destination: string | null; startDate: string | null } | null): Promise<void> {
+    if (!requirements?.departureCity || !requirements.destination || !requirements.startDate) {
+      const answer = "告诉我出发城市、目的地和出发日期，我就能查询实时航班。";
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
+      await this.appendEvent(job.jobId, "travel.answer", { answer });
+      await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
+      return;
+    }
+    const flights = await this.loadFlights(tripId, requirements.departureCity, requirements.destination, requirements.startDate);
+    if (flights.length === 0) {
+      const answer = "航班实时查询暂时不可用，现有行程没有被修改。";
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
+      await this.appendEvent(job.jobId, "travel.answer", { answer });
+    } else {
+      const result = { provider: "variflight", fromCity: requirements.departureCity, toCity: requirements.destination, departureDate: requirements.startDate, fetchedAt: new Date().toISOString(), flights };
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { flights } } });
+      await this.appendEvent(job.jobId, "travel.flight.ready", { result });
+    }
+    await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_FLIGHT_READY" });
+  }
+
+  private async loadFlights(tripId: string, fromCity: string, toCity: string, departureDate: string): Promise<FlightOption[]> {
+    if (!this.flights.configured) return [];
+    const startedAt = Date.now();
+    try {
+      const result = await this.flights.search({ fromCity, toCity, departureDate });
+      await this.prisma.$transaction([
+        this.prisma.tripResource.create({ data: { tripId, kind: "flight", provider: result.provider, query: { fromCity, toCity, departureDate }, data: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue, expiresAt: new Date(Date.now() + 15 * 60 * 1_000) } }),
+        this.prisma.providerCall.create({ data: { provider: result.provider, operation: "flight.search", status: "SUCCEEDED", durationMs: Date.now() - startedAt, request: { fromCity, toCity, departureDate }, response: { resultCount: result.flights.length } } }),
+      ]);
+      return result.flights;
+    } catch {
+      await this.prisma.providerCall.create({ data: { provider: "variflight", operation: "flight.search", status: "FAILED", durationMs: Date.now() - startedAt, errorCode: "PROVIDER_FAILED", request: { fromCity, toCity, departureDate } } });
       return [];
     }
   }
@@ -286,8 +338,8 @@ export class TravelService {
     return { title: version.title, summary: version.summary, currency: version.currency, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, items: day.items.map((item) => ({ time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost) })) })) };
   }
 
-  private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }, hotels: HotelOption[] = []): TripPlan {
-    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
+  private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }, hotels: HotelOption[] = [], flights: FlightOption[] = []): TripPlan {
+    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, flights, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

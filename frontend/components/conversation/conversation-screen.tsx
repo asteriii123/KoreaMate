@@ -4,6 +4,7 @@ import {
   JobEventSchema,
   GuideImportPreviewSchema,
   HotelSearchResultSchema,
+  FlightSearchResultSchema,
   TranslationResultSchema,
   TripPlanSchema,
   type ConversationMode,
@@ -12,6 +13,8 @@ import {
   type GuideImportPreview,
   type HotelOption,
   type HotelSearchResult,
+  type FlightOption,
+  type FlightSearchResult,
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useRef, useState } from "react";
@@ -32,6 +35,7 @@ type TimelineItem =
   | { id: string; kind: "translation"; value: TranslationResult }
   | { id: string; kind: "import"; value: GuideImportPreview }
   | { id: string; kind: "hotels"; value: HotelSearchResult }
+  | { id: string; kind: "flights"; value: FlightSearchResult }
   | { id: string; kind: "plan"; value: TripPlan };
 
 export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing: boolean): boolean {
@@ -133,6 +137,12 @@ export function ConversationScreen({
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const result = HotelSearchResultSchema.parse(event.data.result);
         setTimeline((current) => [...current, { id: event.eventId, kind: "hotels", value: result }]);
+        setStatus("");
+      });
+      stream.addEventListener("travel.flight.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const result = FlightSearchResultSchema.parse(event.data.result);
+        setTimeline((current) => [...current, { id: event.eventId, kind: "flights", value: result }]);
         setStatus("");
       });
       stream.addEventListener("job.completed", () => {
@@ -254,6 +264,7 @@ export function ConversationScreen({
             </article>;
           }
           if (item.kind === "hotels") return <HotelCards key={item.id} hotels={item.value.hotels} title={`${item.value.destination}住宿候选`} />;
+          if (item.kind === "flights") return <FlightCards key={item.id} flights={item.value.flights} title={`${item.value.fromCity} → ${item.value.toCity}`} />;
           const plan = item.value;
           const weather = weatherText(plan);
           return <article className={styles.plan} key={item.id}>
@@ -272,6 +283,7 @@ export function ConversationScreen({
               </div>
             ) : null}
             {plan.hotels.length > 0 ? <HotelCards hotels={plan.hotels} title="住宿候选" embedded /> : null}
+            {plan.flights.length > 0 ? <FlightCards flights={plan.flights} title="航班候选" embedded /> : null}
             <div className={styles.days}>
               {plan.days.map((day) => (
                 <section className={styles.day} key={day.dayNumber}>
@@ -365,5 +377,18 @@ function HotelCards({ hotels, title, embedded = false }: { hotels: HotelOption[]
       {hotel.bookingUrl ? <a href={hotel.bookingUrl} target="_blank" rel="noreferrer">查看房型</a> : null}
     </article>)}</div>
     <p className={styles.hotelNotice}>价格与房态来自第三方，预订前请在跳转页面再次确认。</p>
+  </section>;
+}
+
+function FlightCards({ flights, title, embedded = false }: { flights: FlightOption[]; title: string; embedded?: boolean }) {
+  return <section className={embedded ? styles.hotelSection : styles.hotelCard}>
+    <p className={styles.translationLabel}>实时航班参考</p>
+    <h2>{title}</h2>
+    <div className={styles.hotelList}>{flights.slice(0, 3).map((flight) => <article key={flight.id} className={styles.flightItem}>
+      <div className={styles.flightRoute}><strong>{flight.flightNumbers}</strong><span>{flight.direct ? "直飞" : `${flight.transferCity ?? "中转"}转机`}</span></div>
+      <div className={styles.flightTimes}><time>{flight.departureAt.slice(11, 16)}</time><span>{flight.duration}</span><time>{flight.arrivalAt.slice(11, 16)}</time></div>
+      <div className={styles.hotelPrice}><strong>约 {flight.price.toLocaleString()} {flight.currency}</strong><span>经济舱参考价</span></div>
+    </article>)}</div>
+    <p className={styles.hotelNotice}>价格与余票来自第三方实时查询，购买前请在出票平台再次确认。</p>
   </section>;
 }

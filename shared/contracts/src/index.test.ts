@@ -6,6 +6,7 @@ import {
   SendMessageRequestSchema,
   TranslationResultSchema,
   ImageTranslationResultSchema,
+  SpeechTranscriptionSchema,
   TripPlanSchema,
   PlaceResultSchema,
 } from "./index.js";
@@ -63,6 +64,11 @@ describe("shared contracts", () => {
       pronunciation: "卡德 决杰 卡能黑哟",
       politeness: "polite",
     }).targetLanguage).toBe("ko");
+  });
+
+  it("validates a bounded speech transcription", () => {
+    expect(SpeechTranscriptionSchema.parse({ text: "안녕하세요", language: "ko", languageProbability: 0.98, duration: 1.8 }).language).toBe("ko");
+    expect(() => SpeechTranscriptionSchema.parse({ text: "", language: "ko", languageProbability: 2, duration: 1 })).toThrow();
   });
 
   it("validates a structured trip plan", () => {

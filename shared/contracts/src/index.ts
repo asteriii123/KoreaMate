@@ -82,6 +82,13 @@ export const TranslationResultSchema = z.object({
   politeness: z.enum(["casual", "polite", "formal"]),
 });
 
+export const SpeechTranscriptionSchema = z.object({
+  text: z.string().trim().min(1),
+  language: z.string().trim().min(2).max(8),
+  languageProbability: z.number().min(0).max(1),
+  duration: z.number().nonnegative().max(35),
+});
+
 export const ImageTranslationResultSchema = z.object({
   kind: z.enum(["text", "menu", "unknown"]),
   title: z.string().min(1),
@@ -272,6 +279,7 @@ export type GuideImportPreview = z.infer<typeof GuideImportPreviewSchema>;
 export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type TranslationResult = z.infer<typeof TranslationResultSchema>;
+export type SpeechTranscription = z.infer<typeof SpeechTranscriptionSchema>;
 export type ImageTranslationResult = z.infer<typeof ImageTranslationResultSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
 export type WeatherContext = z.infer<typeof WeatherContextSchema>;

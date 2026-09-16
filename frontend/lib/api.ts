@@ -4,6 +4,8 @@ import {
   type AcceptedMessage,
   type Conversation,
   type ConversationMode,
+  SpeechTranscriptionSchema,
+  type SpeechTranscription,
 } from "@koreamate/contracts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3100/api/v1";
@@ -90,6 +92,21 @@ export function sendImageTranslationMessage(conversationId: string, text: string
     headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify({ content: { type: "IMAGE_TRANSLATION", text, images } }),
   }, (value) => AcceptedMessageSchema.parse(value));
+}
+
+export async function transcribeSpeech(audio: Blob): Promise<SpeechTranscription> {
+  const form = new FormData();
+  const extension = audio.type.includes("mp4") ? "m4a" : audio.type.includes("ogg") ? "ogg" : "webm";
+  form.append("audio", audio, `recording.${extension}`);
+  const response = await fetch(`${API_URL}/speech/transcriptions`, { method: "POST", credentials: "include", body: form });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    const message = payload?.message;
+    if (message === "SPEECH_EMPTY") throw new Error("没有听清，可以重新录制或输入文字。");
+    if (message === "SPEECH_SERVICE_UNAVAILABLE") throw new Error("本地语音服务暂不可用，文字和图片翻译仍可使用。");
+    throw new Error("语音识别失败，请重试或直接输入文字。");
+  }
+  return SpeechTranscriptionSchema.parse(await response.json());
 }
 
 export function jobEventsUrl(jobId: string): string {

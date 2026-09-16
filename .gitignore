@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 .venv-ocr/
+.venv-whisper/
 
 # Builds and test artifacts
 dist/

@@ -20,8 +20,8 @@ import {
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImageTranslationMessage, sendImportMessage, sendTextMessage } from "../../lib/api";
-import { createSpeechRecognition, recognitionLanguage, speechRecognitionSupported, type SpeechRecognitionController } from "../../lib/speech-recognition";
+import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImageTranslationMessage, sendImportMessage, sendTextMessage, transcribeSpeech } from "../../lib/api";
+import { audioRecordingSupported, createAudioRecorder, recorderErrorMessage, type AudioRecorderController } from "../../lib/audio-recorder";
 import { speakKorean, speechSynthesisSupported, stopSpeaking } from "../../lib/speech-synthesis";
 import styles from "./conversation-screen.module.css";
 
@@ -72,7 +72,7 @@ export function ConversationScreen({
 }: ConversationScreenProps) {
   const conversationId = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const recognition = useRef<SpeechRecognitionController | null>(null);
+  const recorder = useRef<AudioRecorderController | null>(null);
   const [input, setInput] = useState("");
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [status, setStatus] = useState("");
@@ -82,14 +82,15 @@ export function ConversationScreen({
   const [selectedImports, setSelectedImports] = useState<Record<string, number[]>>({});
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({});
   const [confirmedTrips, setConfirmedTrips] = useState<Record<string, boolean>>({});
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
-  const canRecognizeSpeech = useSyncExternalStore(subscribeToStaticCapability, speechRecognitionSupported, serverCapability);
+  const canRecordAudio = useSyncExternalStore(subscribeToStaticCapability, audioRecordingSupported, serverCapability);
   const canSpeak = useSyncExternalStore(subscribeToStaticCapability, speechSynthesisSupported, serverCapability);
 
   useEffect(() => () => {
-    recognition.current?.destroy();
+    recorder.current?.destroy();
     stopSpeaking();
   }, []);
 
@@ -254,30 +255,29 @@ export function ConversationScreen({
     }
   }
 
-  function toggleListening(): void {
-    if (listening) {
-      recognition.current?.stop();
-      setListening(false);
+  async function toggleRecording(): Promise<void> {
+    if (recording) {
+      recorder.current?.stop();
       return;
     }
     setSpeechError("");
-    recognition.current?.destroy();
-    const controller = createSpeechRecognition({
-      language: recognitionLanguage(input),
-      onResult: (text) => setInput((current) => `${current}${current.trim() ? " " : ""}${text}`),
-      onError: (message) => { setSpeechError(message); setListening(false); },
-      onEnd: () => setListening(false),
-    });
-    if (!controller) {
-      setSpeechError("当前浏览器暂不支持语音输入。");
-      return;
-    }
-    recognition.current = controller;
+    recorder.current?.destroy();
     try {
-      controller.start();
-      setListening(true);
-    } catch {
-      setSpeechError("语音识别暂时不可用，仍可直接输入文字。");
+      recorder.current = await createAudioRecorder({
+        onComplete: (audio) => {
+          setRecording(false);
+          setTranscribing(true);
+          void transcribeSpeech(audio).then((result) => {
+            setInput((current) => `${current}${current.trim() ? " " : ""}${result.text}`);
+          }).catch((error: unknown) => {
+            setSpeechError(error instanceof Error ? error.message : "语音识别失败，请重试或直接输入文字。");
+          }).finally(() => setTranscribing(false));
+        },
+        onError: (message) => { setRecording(false); setSpeechError(message); },
+      });
+      setRecording(true);
+    } catch (error) {
+      setSpeechError(recorderErrorMessage(error));
     }
   }
 
@@ -447,7 +447,7 @@ export function ConversationScreen({
             rows={1}
             maxLength={4_000}
           />
-          {mode === "TRANSLATION" ? <button className={`${styles.mic} ${listening ? styles.micActive : ""}`} type="button" disabled={!canRecognizeSpeech || busy} aria-label={!canRecognizeSpeech ? "当前浏览器不支持语音输入" : listening ? "停止语音输入" : "开始语音输入"} aria-pressed={listening} onClick={toggleListening}>
+          {mode === "TRANSLATION" ? <button className={`${styles.mic} ${recording ? styles.micActive : ""}`} type="button" disabled={!canRecordAudio || busy || transcribing} aria-label={!canRecordAudio ? "当前浏览器不支持录音" : transcribing ? "正在识别语音" : recording ? "停止录音" : "开始语音输入"} aria-pressed={recording} onClick={() => void toggleRecording()}>
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           </button> : null}
           <button className={styles.send} type="submit" disabled={(!input.trim() && images.length === 0) || busy} aria-label="发送">
@@ -457,8 +457,9 @@ export function ConversationScreen({
           </button>
         </form>
         {images.length > 0 ? <p className={styles.attachmentStatus}>已选择 {images.length} 张{mode === "TRAVEL" ? "攻略截图" : "待翻译照片"}</p> : null}
-        {mode === "TRANSLATION" && listening ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在听，再点一次麦克风停止。语音识别由浏览器提供。</p> : null}
-        {mode === "TRANSLATION" && !canRecognizeSpeech ? <p className={styles.speechStatus}>当前浏览器暂不支持语音输入，可继续使用文字或图片。</p> : null}
+        {mode === "TRANSLATION" && recording ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在录音，再点一次麦克风停止，最长 30 秒。</p> : null}
+        {mode === "TRANSLATION" && transcribing ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在识别语音，首次加载模型可能需要几分钟…</p> : null}
+        {mode === "TRANSLATION" && !canRecordAudio ? <p className={styles.speechStatus}>当前浏览器暂不支持录音，可继续使用文字或图片。</p> : null}
         {speechError ? <p className={styles.error} role="alert">{speechError}</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
       </div>

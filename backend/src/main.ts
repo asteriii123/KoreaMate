@@ -4,12 +4,14 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { config } from "dotenv";
 import { resolve } from "node:path";
 import { AppModule } from "./app.module.js";
+import multipart from "@fastify/multipart";
 
 config({ path: resolve(process.cwd(), "../.env"), quiet: true });
 config({ path: resolve(process.cwd(), ".env"), override: true, quiet: true });
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ bodyLimit: 10 * 1024 * 1024 }));
+  await app.register(multipart, { limits: { files: 1, fileSize: 10 * 1024 * 1024 } });
   app.setGlobalPrefix("api/v1");
   const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000,http://localhost:3001").split(",");
   app.enableCors({ origin: allowedOrigins, credentials: true });

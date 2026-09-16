@@ -60,8 +60,9 @@ export class TravelService {
       const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
       const today = new Date().toISOString().slice(0, 10);
-      if (await this.handleSavedPlaceIntent(job, previous?.id ?? null)) return;
       const identity = await this.conversationIdentity(job.conversationId);
+      if (await this.handleMemoryIntent(job, identity)) return;
+      if (await this.handleSavedPlaceIntent(job, previous?.id ?? null)) return;
       const memoryCandidates = await this.memoryExtractor.extract(job.text).catch(() => []);
       if (memoryCandidates.length > 0) {
         await this.memories.upsertCandidates(identity, memoryCandidates, job.sourceMessageId).then(async (saved) => {
@@ -307,6 +308,38 @@ export class TravelService {
   private memoryLabel(kind: string, value: string): string {
     const labels: Record<string, string> = { departure_city: "常从", budget_level: "预算偏好", pace: "行程节奏", interest: "喜欢", constraint: "需要注意" };
     return `${labels[kind] ?? "偏好"}${value}`;
+  }
+
+  private async handleMemoryIntent(job: TravelJob, identity: Identity): Promise<boolean> {
+    const text = job.text.trim();
+    const viewing = /(你记住了什么|记得什么|我的旅行偏好|我的偏好)/u.test(text);
+    const forgetting = /(忘掉|忘记|删除偏好|不要再记住|别再记住)/u.test(text);
+    if (!viewing && !forgetting) return false;
+    const { items } = await this.memories.list(identity);
+    if (viewing) {
+      const answer = items.length > 0 ? `我记得：${items.slice(0, 8).map((item) => this.memoryLabel(item.kind, item.value)).join("、")}。你可以点击头像逐项删除。` : "我还没有记住长期旅行偏好。正常规划时，我会逐渐了解你。";
+      await this.memoryResponse(job, "travel.memory.updated", { action: "list", answer }, answer);
+      return true;
+    }
+    const query = text.replace(/(请|帮我|把|将|一下|忘掉|忘记|删除偏好|不要再记住|别再记住|这个偏好|吧|。|！|!)/gu, "").trim();
+    const exact = items.filter((item) => item.value === query);
+    const matches = exact.length > 0 ? exact : items.filter((item) => item.value.includes(query) || query.includes(item.value));
+    if (matches.length !== 1) {
+      const question = matches.length > 1 ? `你想忘掉哪一项：${matches.slice(0, 3).map((item) => item.value).join("、")}？` : "我没有找到这项长期偏好。";
+      await this.memoryResponse(job, "travel.memory.question", { question }, question);
+      return true;
+    }
+    const memory = matches[0]!;
+    await this.memories.remove(identity, memory.id);
+    const answer = `已忘掉“${memory.value}”这项偏好。`;
+    await this.memoryResponse(job, "travel.memory.updated", { action: "removed", memoryId: memory.id, answer }, answer);
+    return true;
+  }
+
+  private async memoryResponse(job: TravelJob, type: "travel.memory.updated" | "travel.memory.question", data: Prisma.InputJsonValue, text: string): Promise<void> {
+    await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text } } });
+    await this.appendEvent(job.jobId, type, data);
+    await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_MEMORY" });
   }
 
   private async handleSavedPlaceIntent(job: TravelJob, versionId: string | null): Promise<boolean> {

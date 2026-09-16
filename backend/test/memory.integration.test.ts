@@ -6,6 +6,8 @@ import { UserMemoryListSchema } from "@koreamate/contracts";
 import { AppModule } from "../src/app.module.js";
 import { PrismaService } from "../src/modules/database/prisma.service.js";
 import { MemoryService } from "../src/modules/memory/memory.service.js";
+import { IdentityService } from "../src/modules/auth/identity.service.js";
+import type { FastifyReply } from "fastify";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -15,6 +17,7 @@ describe("travel memory", () => {
   let memories: MemoryService;
   let guestId: string;
   let cookie: string;
+  let userId: string | null = null;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -31,6 +34,7 @@ describe("travel memory", () => {
 
   afterAll(async () => {
     await prisma.userMemory.deleteMany({ where: { guestId } });
+    if (userId) await prisma.user.deleteMany({ where: { id: userId } });
     await prisma.guestIdentity.deleteMany({ where: { id: guestId } });
     await app.close();
   });
@@ -49,5 +53,18 @@ describe("travel memory", () => {
     const forbidden = await app.inject({ method: "DELETE", url: `/api/v1/memories/${own.items[0]?.id}` });
     expect(forbidden.statusCode).toBe(404);
     expect((await app.inject({ method: "DELETE", url: `/api/v1/memories/${own.items[0]?.id}`, headers: { cookie } })).statusCode).toBe(200);
+  });
+
+  it("merges guest memories into an account without replacing account single values", async () => {
+    const user = await prisma.user.create({ data: { email: `memory-${Date.now()}@example.com` } });
+    userId = user.id;
+    await memories.upsertCandidates({ userId, guestId: null }, [{ kind: "pace", value: "balanced", confidence: 0.9 }]);
+    await memories.upsertCandidates({ userId: null, guestId }, [{ kind: "pace", value: "relaxed", confidence: 0.95 }, { kind: "constraint", value: "不吃辣", confidence: 0.98 }]);
+    const headers = new Map<string, string | string[]>();
+    const reply = { raw: { getHeader: (name: string) => headers.get(name), setHeader: (name: string, value: string | string[]) => headers.set(name, value) } } as unknown as FastifyReply;
+    await app.get(IdentityService).createSession(userId, guestId, reply);
+    const merged = await memories.list({ userId, guestId: null });
+    expect(merged.items.map((item) => item.value)).toEqual(["balanced", "咖啡店", "不吃辣"]);
+    expect(await prisma.userMemory.count({ where: { guestId } })).toBe(0);
   });
 });

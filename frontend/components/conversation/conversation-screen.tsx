@@ -208,8 +208,16 @@ export function ConversationScreen({
       });
       stream.addEventListener("travel.memory.updated", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const answer = typeof event.data.answer === "string" ? event.data.answer : null;
         const summary = typeof event.data.summary === "string" ? event.data.summary : "旅行偏好";
-        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: `已记住：${summary}` }]);
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: answer ?? `已记住：${summary}` }]);
+        setStatus("");
+      });
+      stream.addEventListener("travel.memory.question", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const question = typeof event.data.question === "string" ? event.data.question : "请告诉我想删除哪项偏好。";
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: question }]);
+        setStatus("");
       });
       stream.addEventListener("travel.import.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));

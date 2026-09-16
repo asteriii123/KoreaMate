@@ -31,6 +31,15 @@ export class IdentityService {
   async createSession(userId: string, guestId: string | null, reply: FastifyReply): Promise<void> {
     if (guestId) {
       await this.prisma.$transaction(async (transaction) => {
+        const singleMemoryKinds = ["departure_city", "budget_level", "pace"] as const;
+        const guestMemories = await transaction.userMemory.findMany({ where: { guestId } });
+        for (const guestMemory of guestMemories) {
+          const existing = singleMemoryKinds.includes(guestMemory.kind as typeof singleMemoryKinds[number])
+            ? await transaction.userMemory.findFirst({ where: { userId, kind: guestMemory.kind } })
+            : await transaction.userMemory.findFirst({ where: { userId, kind: guestMemory.kind, normalizedValue: guestMemory.normalizedValue } });
+          if (existing) await transaction.userMemory.delete({ where: { id: guestMemory.id } });
+          else await transaction.userMemory.update({ where: { id: guestMemory.id }, data: { userId, guestId: null } });
+        }
         const guestSavedPlaces = await transaction.savedPlace.findMany({ where: { guestId } });
         for (const guestSavedPlace of guestSavedPlaces) {
           const userSavedPlace = await transaction.savedPlace.findFirst({ where: { userId, placeId: guestSavedPlace.placeId } });
@@ -43,6 +52,7 @@ export class IdentityService {
           }
         }
         await transaction.savedPlace.deleteMany({ where: { guestId } });
+        await transaction.userMemory.deleteMany({ where: { guestId } });
         await transaction.conversation.updateMany({ where: { guestId }, data: { userId, guestId: null } });
         await transaction.guestIdentity.update({ where: { id: guestId }, data: { mergedAt: new Date() } });
       });

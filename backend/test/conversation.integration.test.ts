@@ -201,6 +201,14 @@ describe("conversation persistence", () => {
     expect(await send("想去首尔")).toContain("event: travel.question");
     const firstPlanEvents = await send("3");
     expect(firstPlanEvents).toContain("event: travel.plan.ready");
+    const owner = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id }, select: { guestId: true } });
+    await prisma.userMemory.create({ data: { guestId: owner.guestId, kind: "constraint", value: "不吃辣", normalizedValue: "不吃辣", confidence: 0.98 } });
+    const memoryListEvents = await send("你记住了什么");
+    expect(memoryListEvents).toContain("event: travel.memory.updated");
+    expect(memoryListEvents).not.toContain("event: travel.plan.ready");
+    const forgetEvents = await send("忘掉不吃辣");
+    expect(forgetEvents).toContain("已忘掉");
+    expect(forgetEvents).not.toContain("event: travel.plan.ready");
     const savedPlaceEvents = await send("记住景福宫");
     expect(savedPlaceEvents).toContain("event: travel.saved-place.ready");
     expect(savedPlaceEvents).not.toContain("event: travel.plan.ready");

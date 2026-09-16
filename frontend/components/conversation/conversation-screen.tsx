@@ -206,6 +206,11 @@ export function ConversationScreen({
         setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: question }]);
         setStatus("");
       });
+      stream.addEventListener("travel.memory.updated", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const summary = typeof event.data.summary === "string" ? event.data.summary : "旅行偏好";
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: `已记住：${summary}` }]);
+      });
       stream.addEventListener("travel.import.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const preview = GuideImportPreviewSchema.parse(event.data.preview);

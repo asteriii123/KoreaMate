@@ -9,6 +9,7 @@ import {
   PendingFieldSchema,
   TripRequirementsSchema,
   type TravelProvider,
+  type TravelMemoryContext,
 } from "./travel-provider.js";
 import { applyContextAnswer, inferPendingField } from "./context-answer.js";
 import { TripContextService, type TripContext } from "./trip-context.service.js";
@@ -17,6 +18,8 @@ import { HotelMcpProvider } from "./hotel-mcp.provider.js";
 import { FlightMcpProvider } from "./flight-mcp.provider.js";
 import { SavedPlacesService } from "../saved-places/saved-places.service.js";
 import type { Identity } from "../auth/identity.service.js";
+import { MemoryService } from "../memory/memory.service.js";
+import { OpenAiCompatibleMemoryExtractor } from "../memory/openai-compatible-memory.extractor.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -34,6 +37,8 @@ export class TravelService {
     private readonly hotels: HotelMcpProvider,
     private readonly flights: FlightMcpProvider,
     private readonly savedPlaces: SavedPlacesService,
+    private readonly memories: MemoryService,
+    private readonly memoryExtractor: OpenAiCompatibleMemoryExtractor,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -56,6 +61,15 @@ export class TravelService {
       const previous = trip.versions[0] ?? null;
       const today = new Date().toISOString().slice(0, 10);
       if (await this.handleSavedPlaceIntent(job, previous?.id ?? null)) return;
+      const identity = await this.conversationIdentity(job.conversationId);
+      const memoryCandidates = await this.memoryExtractor.extract(job.text).catch(() => []);
+      if (memoryCandidates.length > 0) {
+        await this.memories.upsertCandidates(identity, memoryCandidates, job.sourceMessageId).then(async (saved) => {
+          const summary = saved.map((item) => this.memoryLabel(item.kind, item.value)).join("、");
+          await this.appendEvent(job.jobId, "travel.memory.updated", { action: "saved", summary });
+        }).catch(() => undefined);
+      }
+      const memory = await this.memoryContext(identity).catch(() => this.emptyMemory());
       if (previous && this.isConfirmation(job.text)) {
         await this.prisma.$transaction([
           this.prisma.trip.update({ where: { id: trip.id }, data: { confirmedVersionId: previous.id, confirmedAt: new Date() } }),
@@ -90,6 +104,7 @@ export class TravelService {
         previousPlan: previous ? this.toPreviousPlan(previous) : null,
         pendingField,
         today,
+        memory,
       });
 
       const resolvedRequirements = pendingField && contextualRequirements?.[pendingField] != null
@@ -268,6 +283,32 @@ export class TravelService {
     return /(航班|机票|飞机票|直飞|转机)/u.test(text);
   }
 
+  private async conversationIdentity(conversationId: string): Promise<Identity> {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { userId: true, guestId: true } });
+    return { userId: conversation?.userId ?? null, guestId: conversation?.guestId ?? null };
+  }
+
+  private async memoryContext(identity: Identity): Promise<TravelMemoryContext> {
+    const { items } = await this.memories.list(identity);
+    const one = (kind: typeof items[number]["kind"]): string | null => items.find((item) => item.kind === kind)?.value ?? null;
+    const budget = one("budget_level");
+    const pace = one("pace");
+    return {
+      departureCity: one("departure_city"),
+      budgetLevel: budget === "economy" || budget === "balanced" || budget === "comfortable" ? budget : null,
+      pace: pace === "relaxed" || pace === "balanced" || pace === "packed" ? pace : null,
+      interests: items.filter((item) => item.kind === "interest").map((item) => item.value),
+      constraints: items.filter((item) => item.kind === "constraint").map((item) => item.value),
+    };
+  }
+
+  private emptyMemory(): TravelMemoryContext { return { departureCity: null, budgetLevel: null, pace: null, interests: [], constraints: [] }; }
+
+  private memoryLabel(kind: string, value: string): string {
+    const labels: Record<string, string> = { departure_city: "常从", budget_level: "预算偏好", pace: "行程节奏", interest: "喜欢", constraint: "需要注意" };
+    return `${labels[kind] ?? "偏好"}${value}`;
+  }
+
   private async handleSavedPlaceIntent(job: TravelJob, versionId: string | null): Promise<boolean> {
     const text = job.text.trim();
     const viewing = /(我收藏的|我的收藏|收藏了哪些|收藏了什么|收藏列表)/u.test(text);
@@ -290,8 +331,9 @@ export class TravelService {
     const candidates = await this.prisma.itineraryItem.findMany({ where: { itineraryDay: { tripVersionId: versionId }, placeId: { not: null } }, orderBy: [{ itineraryDay: { dayNumber: "asc" } }, { startTime: "asc" }], include: { place: true } });
     const unique = [...new Map(candidates.filter((item) => item.place).map((item) => [item.placeId!, item])).values()];
     const query = text.replace(/(请|帮我|把|将|一下|这个地方|这个地点|刚才那个|取消收藏|不要收藏|移出收藏|收藏|记住|保存|起来|吧|。|！|!)/gu, "").trim();
+    const exactMatches = query ? unique.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => name === query)) : [];
     const matches = query
-      ? unique.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => name?.includes(query) || query.includes(name ?? "")))
+      ? exactMatches.length > 0 ? exactMatches : unique.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => Boolean(name) && (name!.includes(query) || query.includes(name!))))
       : unique.slice(-1);
     if (matches.length !== 1) {
       const names = matches.length > 1 ? matches.slice(0, 3).map((item) => item.place?.nameZh ?? item.title).join("、") : "";

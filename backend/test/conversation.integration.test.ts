@@ -17,6 +17,7 @@ import { FrankfurterExchangeProvider } from "../src/modules/travel/frankfurter-e
 import { GuideImportService } from "../src/modules/travel/guide-import.service.js";
 import { HotelMcpProvider } from "../src/modules/travel/hotel-mcp.provider.js";
 import { FlightMcpProvider } from "../src/modules/travel/flight-mcp.provider.js";
+import { OpenAiCompatibleMemoryExtractor } from "../src/modules/memory/openai-compatible-memory.extractor.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -87,6 +88,8 @@ describe("conversation persistence", () => {
       .useValue({ configured: true, search: async (input: { destination: string; checkIn: string; checkOut: string }) => ({ provider: "rollinggo-hotel", destination: input.destination, checkIn: input.checkIn, checkOut: input.checkOut, fetchedAt: "2026-09-15T00:00:00.000Z", hotels: [{ id: "5956", name: "里维埃拉酒店", starRating: 4, lowestPrice: 1017, currency: "CNY", address: "首尔江南区", imageUrl: null, bookingUrl: "https://rollinggo.cn/hotel/5956", recommendation: "性价比之选", cancellation: "免费取消" }] }) })
       .overrideProvider(FlightMcpProvider)
       .useValue({ configured: true, search: async (input: { fromCity: string; toCity: string; departureDate: string }) => ({ provider: "variflight", fromCity: input.fromCity, toCity: input.toCity, departureDate: input.departureDate, fetchedAt: "2026-09-15T00:00:00.000Z", flights: [{ id: "OZ368-2026-10-20", flightNumbers: "OZ368", departureAt: "2026-10-20 01:05:00", arrivalAt: "2026-10-20 04:05:00", duration: "2h", direct: true, transferCity: null, price: 801, currency: "CNY" }] }) })
+      .overrideProvider(OpenAiCompatibleMemoryExtractor)
+      .useValue({ extract: async () => [] })
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("api/v1");

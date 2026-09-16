@@ -9,6 +9,7 @@ export class OpenAiCompatibleMemoryExtractor implements MemoryExtractor {
   async extract(text: string): Promise<MemoryCandidate[]> {
     if (this.containsSensitiveInformation(text)) return [];
     const fallback = this.rules(text);
+    if (fallback.length === 0 && !/(通常|一般|经常|默认|喜欢|偏好|不吃|不能|预算|出发|节奏|轮椅|吃素|少走路)/u.test(text)) return [];
     const apiKey = process.env.LLM_API_KEY;
     const model = process.env.LLM_MODEL;
     if (!apiKey || !model) return fallback;

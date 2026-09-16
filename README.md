@@ -46,6 +46,10 @@ docker compose -f infrastructure/docker-compose.yml up -d postgres
 npm run dev
 ```
 
+本地 PostgreSQL 使用带 `pgvector` 的 PostgreSQL 17 镜像，并沿用 `koreamate_v3_postgres` 数据卷。首次执行知识库迁移时会自动创建 `vector` 扩展，无需手工安装数据库插件。
+
+第 8D 阶段使用从魔搭下载到本机缓存的 `BAAI/bge-m3` 生成中韩文检索向量。模型本身免费且不需要 API Key，但部署到公网服务器时仍会产生 CPU、内存或 GPU 资源费用；模型权重不会提交到 Git。
+
 默认地址：
 
 - Web：<http://localhost:3001>

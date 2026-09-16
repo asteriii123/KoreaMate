@@ -79,7 +79,9 @@ export class ConversationsService {
             conversationId,
             role: "USER",
             contentType: "TEXT",
-            content: request.content,
+            content: request.content.type === "IMAGE_TRANSLATION"
+              ? { type: request.content.type, text: request.content.text, imageCount: request.content.images.length }
+              : request.content,
             idempotencyKey,
           },
         });
@@ -148,8 +150,9 @@ export class ConversationsService {
   }
 
   private messageImageCount(content: Prisma.JsonValue | undefined): number {
-    if (!content || typeof content !== "object" || Array.isArray(content) || !("images" in content) || !Array.isArray(content.images)) return 0;
-    return content.images.length;
+    if (!content || typeof content !== "object" || Array.isArray(content)) return 0;
+    if ("imageCount" in content && typeof content.imageCount === "number") return content.imageCount;
+    return "images" in content && Array.isArray(content.images) ? content.images.length : 0;
   }
 
   private messageImageTranslation(content: Prisma.JsonValue | undefined): Prisma.JsonValue | null {

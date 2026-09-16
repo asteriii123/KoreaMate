@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type { ImageTranslationResult } from "@koreamate/contracts";
 import { PrismaService } from "../database/prisma.service.js";
@@ -19,6 +19,7 @@ type TranslationJob = {
 
 @Injectable()
 export class TranslationService {
+  private readonly logger = new Logger(TranslationService.name);
   constructor(
     private readonly prisma: PrismaService,
     @Inject(TRANSLATION_PROVIDER) private readonly provider: TranslationProvider,
@@ -68,6 +69,7 @@ export class TranslationService {
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRANSLATION_READY" });
     } catch (error) {
       const notConfigured = error instanceof TranslationProviderNotConfiguredError;
+      this.logger.error(`Translation job ${job.jobId} failed: ${error instanceof Error ? error.name : "UnknownError"}`);
       await this.finish(job.jobId, "FAILED", "job.failed", {
         code: notConfigured ? "TRANSLATION_PROVIDER_NOT_CONFIGURED" : "TRANSLATION_PROVIDER_FAILED",
         message: notConfigured

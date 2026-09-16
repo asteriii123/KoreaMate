@@ -462,9 +462,9 @@ export function ConversationScreen({
             rows={1}
             maxLength={4_000}
           />
-          {mode === "TRANSLATION" ? <button className={`${styles.mic} ${recording ? styles.micActive : ""}`} type="button" disabled={!canRecordAudio || busy || transcribing} aria-label={!canRecordAudio ? "当前浏览器不支持录音" : transcribing ? "正在识别语音" : recording ? "停止录音" : "开始语音输入"} aria-pressed={recording} onClick={() => void toggleRecording()}>
+          <button className={`${styles.mic} ${recording ? styles.micActive : ""}`} type="button" disabled={!canRecordAudio || busy || transcribing} aria-label={!canRecordAudio ? "当前浏览器不支持录音" : transcribing ? "正在识别语音" : recording ? "停止录音" : "开始语音输入"} aria-pressed={recording} onClick={() => void toggleRecording()}>
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          </button> : null}
+          </button>
           <button className={styles.send} type="submit" disabled={(!input.trim() && images.length === 0) || busy} aria-label="发送">
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M12 19V5m0 0l-6 6m6-6l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -472,9 +472,9 @@ export function ConversationScreen({
           </button>
         </form>
         {images.length > 0 ? <p className={styles.attachmentStatus}>已选择 {images.length} 张{mode === "TRAVEL" ? "攻略截图" : "待翻译照片"}</p> : null}
-        {mode === "TRANSLATION" && recording ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在录音，再点一次麦克风停止，最长 30 秒。</p> : null}
-        {mode === "TRANSLATION" && transcribing ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在识别语音，首次加载模型可能需要几分钟…</p> : null}
-        {mode === "TRANSLATION" && !canRecordAudio ? <p className={styles.speechStatus}>当前浏览器暂不支持录音，可继续使用文字或图片。</p> : null}
+        {recording ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在录音，再点一次麦克风停止，最长 30 秒。</p> : null}
+        {transcribing ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在识别语音，首次加载模型可能需要几分钟…</p> : null}
+        {!canRecordAudio ? <p className={styles.speechStatus}>当前浏览器暂不支持录音，可继续使用文字或图片。</p> : null}
         {speechError ? <p className={styles.error} role="alert">{speechError}</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
       </div>

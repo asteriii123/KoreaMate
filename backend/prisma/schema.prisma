@@ -53,6 +53,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]
   sessions      Session[]
+  savedPlaces   SavedPlace[]
 }
 
 model GuestIdentity {
@@ -61,6 +62,7 @@ model GuestIdentity {
   createdAt     DateTime       @default(now())
   mergedAt      DateTime?
   conversations Conversation[]
+  savedPlaces   SavedPlace[]
 }
 
 model EmailVerificationCode {
@@ -217,6 +219,7 @@ model ItineraryItem {
 model Place {
   id             String          @id @default(uuid()) @db.Uuid
   name           String
+  nameZh         String?
   normalizedName String
   address        String?
   latitude       Decimal         @db.Decimal(10, 7)
@@ -226,8 +229,27 @@ model Place {
   updatedAt      DateTime        @updatedAt
   sources        PlaceSource[]
   itineraryItems ItineraryItem[]
+  savedPlaces    SavedPlace[]
 
   @@index([normalizedName])
+}
+
+model SavedPlace {
+  id        String         @id @default(uuid()) @db.Uuid
+  placeId   String         @db.Uuid
+  userId    String?        @db.Uuid
+  guestId   String?        @db.Uuid
+  note      String?        @db.VarChar(240)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  place     Place          @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guest     GuestIdentity? @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, placeId])
+  @@unique([guestId, placeId])
+  @@index([userId, createdAt])
+  @@index([guestId, createdAt])
 }
 
 model PlaceSource {

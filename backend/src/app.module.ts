@@ -8,6 +8,7 @@ import { TravelModule } from "./modules/travel/travel.module.js";
 import { PlacesModule } from "./modules/places/places.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { SpeechModule } from "./modules/speech/speech.module.js";
+import { SavedPlacesModule } from "./modules/saved-places/saved-places.module.js";
 
-@Module({ imports: [DatabaseModule, AuthModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule] })
+@Module({ imports: [DatabaseModule, AuthModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule] })
 export class AppModule {}

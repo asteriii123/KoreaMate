@@ -6,6 +6,9 @@ import {
   type ConversationMode,
   SpeechTranscriptionSchema,
   type SpeechTranscription,
+  SavedPlaceListSchema,
+  SavedPlaceSchema,
+  type SavedPlace,
 } from "@koreamate/contracts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3100/api/v1";
@@ -111,4 +114,16 @@ export async function transcribeSpeech(audio: Blob): Promise<SpeechTranscription
 
 export function jobEventsUrl(jobId: string): string {
   return `${API_URL}/jobs/${jobId}/events`;
+}
+
+export function listSavedPlaces(): Promise<{ items: SavedPlace[] }> {
+  return requestJson("/saved-places", { method: "GET" }, (value) => SavedPlaceListSchema.parse(value));
+}
+
+export function savePlace(placeId: string, note?: string | null): Promise<SavedPlace> {
+  return requestJson("/saved-places", { method: "POST", body: JSON.stringify({ placeId, note }) }, (value) => SavedPlaceSchema.parse(value));
+}
+
+export async function deleteSavedPlace(id: string): Promise<void> {
+  await requestJson(`/saved-places/${id}`, { method: "DELETE" }, () => undefined);
 }

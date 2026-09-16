@@ -25,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className={styles.nav}>
         <Link className={pathname === "/depart" ? styles.active : ""} href="/depart" onClick={closeMobile}><span aria-hidden="true">↗</span><span className={styles.label}>开始出发吧</span></Link>
         <Link className={pathname === "/history" ? styles.active : ""} href="/history" onClick={closeMobile}><span aria-hidden="true">◷</span><span className={styles.label}>历史记录</span></Link>
+        <Link className={pathname === "/saved" ? styles.active : ""} href="/saved" onClick={closeMobile}><span aria-hidden="true">♡</span><span className={styles.label}>我的收藏</span></Link>
       </nav>
       <div className={styles.account}>{user ? <><button type="button" className={styles.accountButton} title={user.email}><span className={styles.avatar}>{user.email[0]?.toUpperCase()}</span><span className={styles.label}>{user.email}</span></button><button className={`${styles.logout} ${styles.label}`} type="button" onClick={() => void logout().then(() => { setUser(null); window.dispatchEvent(new Event("koreamate-auth-changed")); })}>退出</button></> : <button type="button" className={styles.accountButton} onClick={() => setLoginOpen(true)}><span className={styles.avatar}>人</span><span className={styles.label}>登录</span></button>}</div>
     </aside>

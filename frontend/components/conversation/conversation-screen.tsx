@@ -20,7 +20,7 @@ import {
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImageTranslationMessage, sendImportMessage, sendTextMessage, transcribeSpeech } from "../../lib/api";
+import { confirmTrip, createConversation, deleteSavedPlace, getConversation, jobEventsUrl, listSavedPlaces, savePlace, sendImageTranslationMessage, sendImportMessage, sendTextMessage, transcribeSpeech } from "../../lib/api";
 import { audioRecordingSupported, createAudioRecorder, recorderErrorMessage, type AudioRecorderController } from "../../lib/audio-recorder";
 import { speakKorean, speechSynthesisSupported, stopSpeaking } from "../../lib/speech-synthesis";
 import styles from "./conversation-screen.module.css";
@@ -86,6 +86,7 @@ export function ConversationScreen({
   const [transcribing, setTranscribing] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [savedPlaces, setSavedPlaces] = useState<Record<string, string>>({});
   const canRecordAudio = useSyncExternalStore(subscribeToStaticCapability, audioRecordingSupported, serverCapability);
   const canSpeak = useSyncExternalStore(subscribeToStaticCapability, speechSynthesisSupported, serverCapability);
 
@@ -96,6 +97,8 @@ export function ConversationScreen({
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("conversation");
+    const prefill = new URLSearchParams(window.location.search).get("prefill");
+    if (prefill) void Promise.resolve(prefill).then(setInput);
     if (!id) return;
     void getConversation(id).then((value) => {
       if (value.mode !== mode) return;
@@ -105,6 +108,17 @@ export function ConversationScreen({
       setTimeline(restored);
     }).catch(() => setError("这条历史记录暂时无法打开。"));
   }, [mode]);
+
+  useEffect(() => { if (mode !== "TRAVEL") return; void listSavedPlaces().then(({ items }) => setSavedPlaces(Object.fromEntries(items.map((item) => [item.placeId, item.id])))).catch(() => undefined); }, [mode]);
+
+  async function toggleSaved(placeId: string): Promise<void> {
+    const savedId = savedPlaces[placeId];
+    setSavedPlaces((current) => { const next = { ...current }; if (savedId) delete next[placeId]; else next[placeId] = "pending"; return next; });
+    try {
+      if (savedId && savedId !== "pending") await deleteSavedPlace(savedId);
+      else { const saved = await savePlace(placeId); setSavedPlaces((current) => ({ ...current, [placeId]: saved.id })); }
+    } catch { setSavedPlaces((current) => { const next = { ...current }; if (savedId) next[placeId] = savedId; else delete next[placeId]; return next; }); setError("收藏操作失败，请重试。"); }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -412,6 +426,7 @@ export function ConversationScreen({
                           <div className={styles.placeMeta}>
                             {item.place.address ? <span>{item.place.address}</span> : null}
                             {item.place.mapUrl ? <a href={item.place.mapUrl} target="_blank" rel="noreferrer">地图</a> : null}
+                            <button className={styles.savePlace} type="button" aria-pressed={Boolean(savedPlaces[item.place.id])} aria-label={savedPlaces[item.place.id] ? "取消收藏" : "收藏地点"} onClick={() => void toggleSaved(item.place!.id)}>{savedPlaces[item.place.id] ? "♥ 已收藏" : "♡ 收藏"}</button>
                           </div>
                         ) : null}
                       </div>

@@ -67,6 +67,8 @@ export const JobEventTypeSchema = z.enum([
   "travel.flight.ready",
   "travel.plan.ready",
   "travel.trip.confirmed",
+  "travel.saved-place.ready",
+  "travel.saved-place.question",
   "job.completed",
   "job.failed",
 ]);
@@ -113,13 +115,33 @@ export const ItineraryItemSchema = z.object({
   estimatedCost: z.number().nonnegative(),
   currency: z.string().length(3),
   place: z.object({
+    id: z.uuid(),
     name: z.string().min(1),
+    nameZh: z.string().min(1).nullable().default(null),
     address: z.string().nullable(),
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     mapUrl: z.url().nullable(),
+    saved: z.boolean().default(false),
   }).nullable().default(null),
 });
+
+export const SavedPlaceSchema = z.object({
+  id: z.uuid(),
+  placeId: z.uuid(),
+  name: z.string().min(1),
+  nameZh: z.string().min(1).nullable(),
+  address: z.string().nullable(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  mapUrl: z.url().nullable(),
+  note: z.string().max(240).nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export const SavedPlaceListSchema = z.object({ items: z.array(SavedPlaceSchema) });
+export const CreateSavedPlaceRequestSchema = z.object({ placeId: z.uuid(), note: z.string().trim().max(240).nullable().optional() });
+export const UpdateSavedPlaceRequestSchema = z.object({ note: z.string().trim().max(240).nullable() });
 
 export const ItineraryDaySchema = z.object({
   dayNumber: z.number().int().positive(),
@@ -292,3 +314,4 @@ export type PlaceResult = z.infer<typeof PlaceResultSchema>;
 export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
 export type User = z.infer<typeof UserSchema>;
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
+export type SavedPlace = z.infer<typeof SavedPlaceSchema>;

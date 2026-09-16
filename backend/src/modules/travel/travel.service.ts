@@ -19,7 +19,7 @@ import { FlightMcpProvider } from "./flight-mcp.provider.js";
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
 type PlannedDay = { dayNumber: number; date: string | null; title: string; items: PlannedItem[]; estimatedCost: number };
-type StoredItem = { id: string; startTime: string; title: string; description: string; estimatedCost: unknown; currency: string; place: null | { name: string; address: string | null; latitude: unknown; longitude: unknown; sources: Array<{ sourceUrl: string | null }> } };
+type StoredItem = { id: string; startTime: string; title: string; description: string; estimatedCost: unknown; currency: string; place: null | { id: string; name: string; nameZh: string | null; address: string | null; latitude: unknown; longitude: unknown; sources: Array<{ sourceUrl: string | null }> } };
 
 @Injectable()
 export class TravelService {
@@ -124,6 +124,7 @@ export class TravelService {
       const totalCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);
       const versionNumber = (previous?.versionNumber ?? 0) + 1;
       const version = await this.prisma.$transaction(async (transaction) => {
+        await Promise.all(days.flatMap((day) => day.items).filter((item) => item.place).map((item) => transaction.place.updateMany({ where: { id: item.place!.id, nameZh: null }, data: { nameZh: item.title } })));
         const created = await transaction.tripVersion.create({
           data: {
             tripId: trip.id,
@@ -377,7 +378,7 @@ export class TravelService {
   }
 
   private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }, hotels: HotelOption[] = [], flights: FlightOption[] = []): TripPlan {
-    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, flights, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { name: item.place.name, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null } : null })) })) };
+    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, flights, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { id: item.place.id, name: item.place.name, nameZh: item.place.nameZh, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null, saved: false } : null })) })) };
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

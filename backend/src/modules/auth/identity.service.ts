@@ -30,10 +30,22 @@ export class IdentityService {
 
   async createSession(userId: string, guestId: string | null, reply: FastifyReply): Promise<void> {
     if (guestId) {
-      await this.prisma.$transaction([
-        this.prisma.conversation.updateMany({ where: { guestId }, data: { userId, guestId: null } }),
-        this.prisma.guestIdentity.update({ where: { id: guestId }, data: { mergedAt: new Date() } }),
-      ]);
+      await this.prisma.$transaction(async (transaction) => {
+        const guestSavedPlaces = await transaction.savedPlace.findMany({ where: { guestId } });
+        for (const guestSavedPlace of guestSavedPlaces) {
+          const userSavedPlace = await transaction.savedPlace.findFirst({ where: { userId, placeId: guestSavedPlace.placeId } });
+          if (userSavedPlace) {
+            if (!userSavedPlace.note && guestSavedPlace.note) {
+              await transaction.savedPlace.update({ where: { id: userSavedPlace.id }, data: { note: guestSavedPlace.note } });
+            }
+          } else {
+            await transaction.savedPlace.update({ where: { id: guestSavedPlace.id }, data: { userId, guestId: null } });
+          }
+        }
+        await transaction.savedPlace.deleteMany({ where: { guestId } });
+        await transaction.conversation.updateMany({ where: { guestId }, data: { userId, guestId: null } });
+        await transaction.guestIdentity.update({ where: { id: guestId }, data: { mergedAt: new Date() } });
+      });
     }
     const token = randomBytes(32).toString("base64url");
     await this.prisma.session.create({ data: { userId, tokenHash: this.hash(token), expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } });

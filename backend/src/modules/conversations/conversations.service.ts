@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { TranslationService } from "../translation/translation.service.js";
 import { TravelService } from "../travel/travel.service.js";
+import type { Identity } from "../auth/identity.service.js";
 
 @Injectable()
 export class ConversationsService {
@@ -18,8 +19,8 @@ export class ConversationsService {
     private readonly travel: TravelService,
   ) {}
 
-  async create(mode: ConversationMode): Promise<Conversation> {
-    const conversation = await this.prisma.conversation.create({ data: { mode } });
+  async create(mode: ConversationMode, identity: Identity = { userId: null, guestId: null }): Promise<Conversation> {
+    const conversation = await this.prisma.conversation.create({ data: { mode, userId: identity.userId, guestId: identity.guestId } });
     return {
       id: conversation.id,
       mode: conversation.mode,
@@ -27,10 +28,32 @@ export class ConversationsService {
     };
   }
 
+  async list(identity: Identity): Promise<{ items: Array<{ conversationId: string; mode: ConversationMode; title: string; updatedAt: string; tripId: string | null; confirmed: boolean }> }> {
+    if (!identity.userId && !identity.guestId) return { items: [] };
+    const conversations = await this.prisma.conversation.findMany({
+      where: this.ownerWhere(identity), orderBy: { updatedAt: "desc" }, take: 100,
+      include: { trip: { include: { versions: { orderBy: { versionNumber: "desc" }, take: 1 } } }, messages: { where: { role: "USER" }, orderBy: { createdAt: "asc" }, take: 1 } },
+    });
+    return { items: conversations.map((conversation) => ({ conversationId: conversation.id, mode: conversation.mode, title: conversation.trip?.title ?? this.messageTitle(conversation.messages[0]?.content) ?? (conversation.mode === "TRAVEL" ? "新的旅行" : "新的翻译"), updatedAt: conversation.updatedAt.toISOString(), tripId: conversation.trip?.id ?? null, confirmed: Boolean(conversation.trip?.confirmedAt) })) };
+  }
+
+  async get(id: string, identity: Identity): Promise<{ id: string; mode: ConversationMode; createdAt: string; timeline: unknown[]; latestPlan: import("@koreamate/contracts").TripPlan | null }> {
+    const conversation = await this.prisma.conversation.findFirst({ where: { id, ...this.ownerWhere(identity) }, include: { messages: { orderBy: { createdAt: "asc" }, include: { translation: true } } } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+    const timeline = conversation.messages.flatMap((message) => {
+      const text = this.messageText(message.content);
+      const items: unknown[] = text ? [{ id: message.id, kind: message.role === "USER" ? "user" : "question", text }] : [];
+      if (message.translation) items.push({ id: message.translation.id, kind: "translation", value: { id: message.translation.id, sourceLanguage: message.translation.sourceLanguage, targetLanguage: message.translation.targetLanguage, sourceText: message.translation.sourceText, translatedText: message.translation.translatedText, naturalExpression: message.translation.naturalExpression, pronunciation: message.translation.pronunciation, politeness: message.translation.politeness } });
+      return items;
+    });
+    return { id: conversation.id, mode: conversation.mode, createdAt: conversation.createdAt.toISOString(), timeline, latestPlan: await this.travel.latestForConversation(id) };
+  }
+
   async sendMessage(
     conversationId: string,
     idempotencyKey: string,
     request: SendMessageRequest,
+    identity: Identity = { userId: null, guestId: null },
   ): Promise<AcceptedMessage> {
     const existing = await this.prisma.message.findUnique({
       where: { conversationId_idempotencyKey: { conversationId, idempotencyKey } },
@@ -41,7 +64,7 @@ export class ConversationsService {
       return { messageId: existing.id, jobId: existing.job.id, status: "ACCEPTED" };
     }
 
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conversation = await this.prisma.conversation.findFirst({ where: { id: conversationId, ...this.ownerWhere(identity) } });
     if (!conversation) {
       throw new NotFoundException("Conversation not found");
     }
@@ -101,5 +124,22 @@ export class ConversationsService {
       }
       throw error;
     }
+  }
+
+  private ownerWhere(identity: Identity): Prisma.ConversationWhereInput {
+    if (identity.userId) return { userId: identity.userId };
+    if (identity.guestId) return { guestId: identity.guestId };
+    return { id: "00000000-0000-0000-0000-000000000000" };
+  }
+
+  private messageTitle(content: Prisma.JsonValue | undefined): string | null {
+    if (!content || typeof content !== "object" || Array.isArray(content)) return null;
+    const text = "text" in content && typeof content.text === "string" ? content.text.trim() : "";
+    return text ? `${text.slice(0, 28)}${text.length > 28 ? "…" : ""}` : null;
+  }
+
+  private messageText(content: Prisma.JsonValue | undefined): string | null {
+    if (!content || typeof content !== "object" || Array.isArray(content)) return null;
+    return "text" in content && typeof content.text === "string" ? content.text : null;
   }
 }

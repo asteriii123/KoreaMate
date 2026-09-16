@@ -6,6 +6,7 @@ import { JobsModule } from "./modules/jobs/jobs.module.js";
 import { TranslationModule } from "./modules/translation/translation.module.js";
 import { TravelModule } from "./modules/travel/travel.module.js";
 import { PlacesModule } from "./modules/places/places.module.js";
+import { AuthModule } from "./modules/auth/auth.module.js";
 
-@Module({ imports: [DatabaseModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule] })
+@Module({ imports: [DatabaseModule, AuthModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule] })
 export class AppModule {}

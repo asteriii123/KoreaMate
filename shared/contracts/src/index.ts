@@ -12,6 +12,19 @@ export const ConversationSchema = z.object({
   createdAt: z.iso.datetime(),
 });
 
+export const UserSchema = z.object({ id: z.uuid(), email: z.email() });
+export const RequestEmailCodeSchema = z.object({ email: z.email().max(254) });
+export const VerifyEmailCodeSchema = z.object({ email: z.email().max(254), code: z.string().regex(/^\d{6}$/) });
+export const HistoryItemSchema = z.object({
+  conversationId: z.uuid(),
+  mode: ConversationModeSchema,
+  title: z.string().min(1),
+  updatedAt: z.iso.datetime(),
+  tripId: z.uuid().nullable(),
+  confirmed: z.boolean(),
+});
+export const HistoryListSchema = z.object({ items: z.array(HistoryItemSchema) });
+
 export const TextMessageContentSchema = z.object({
   type: z.literal("TEXT"),
   text: z.string().trim().min(1).max(4_000),
@@ -44,6 +57,7 @@ export const JobEventTypeSchema = z.enum([
   "travel.hotel.ready",
   "travel.flight.ready",
   "travel.plan.ready",
+  "travel.trip.confirmed",
   "job.completed",
   "job.failed",
 ]);
@@ -242,3 +256,5 @@ export type FlightOption = z.infer<typeof FlightOptionSchema>;
 export type FlightSearchResult = z.infer<typeof FlightSearchResultSchema>;
 export type PlaceResult = z.infer<typeof PlaceResultSchema>;
 export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
+export type User = z.infer<typeof UserSchema>;
+export type HistoryItem = z.infer<typeof HistoryItemSchema>;

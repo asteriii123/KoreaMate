@@ -24,6 +24,11 @@ describe("conversation persistence", () => {
   let app: NestFastifyApplication;
   let prisma: PrismaService;
   let baseUrl: string;
+  async function createConversation(mode: "TRAVEL" | "TRANSLATION"): Promise<{ conversation: { id: string; mode: "TRAVEL" | "TRANSLATION"; createdAt: string }; cookie: string | undefined }> {
+    const response = await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode } });
+    const cookie = response.headers["set-cookie"];
+    return { conversation: ConversationSchema.parse(response.json()), cookie: Array.isArray(cookie) ? cookie[0] : cookie };
+  }
 
   beforeAll(async () => {
     const fakeTranslationProvider: TranslationProvider = {
@@ -110,17 +115,12 @@ describe("conversation persistence", () => {
   });
 
   it("returns the same message and job for a repeated idempotency key", async () => {
-    const conversationResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/conversations",
-      payload: { mode: "TRANSLATION" },
-    });
-    const conversation = ConversationSchema.parse(conversationResponse.json());
+    const { conversation, cookie } = await createConversation("TRANSLATION");
     const idempotencyKey = randomUUID();
     const request = {
       method: "POST" as const,
       url: `/api/v1/conversations/${conversation.id}/messages`,
-      headers: { "idempotency-key": idempotencyKey },
+      headers: { "idempotency-key": idempotencyKey, cookie },
       payload: { content: { type: "TEXT", text: "请问可以刷卡吗？" } },
     };
 
@@ -134,15 +134,11 @@ describe("conversation persistence", () => {
   });
 
   it("replays persisted job events as SSE", async () => {
-    const conversation = ConversationSchema.parse((await app.inject({
-      method: "POST",
-      url: "/api/v1/conversations",
-      payload: { mode: "TRAVEL" },
-    })).json());
+    const { conversation, cookie } = await createConversation("TRAVEL");
     const accepted = AcceptedMessageSchema.parse((await app.inject({
       method: "POST",
       url: `/api/v1/conversations/${conversation.id}/messages`,
-      headers: { "idempotency-key": randomUUID() },
+      headers: { "idempotency-key": randomUUID(), cookie },
       payload: { content: { type: "TEXT", text: "十月去首尔五天" } },
     })).json());
 
@@ -156,15 +152,11 @@ describe("conversation persistence", () => {
   });
 
   it("persists and streams a real provider translation result", async () => {
-    const conversation = ConversationSchema.parse((await app.inject({
-      method: "POST",
-      url: "/api/v1/conversations",
-      payload: { mode: "TRANSLATION" },
-    })).json());
+    const { conversation, cookie } = await createConversation("TRANSLATION");
     const accepted = AcceptedMessageSchema.parse((await app.inject({
       method: "POST",
       url: `/api/v1/conversations/${conversation.id}/messages`,
-      headers: { "idempotency-key": randomUUID() },
+      headers: { "idempotency-key": randomUUID(), cookie },
       payload: { content: { type: "TEXT", text: "你好" } },
     })).json());
 
@@ -194,9 +186,9 @@ describe("conversation persistence", () => {
   });
 
   it("asks once, creates a validated plan, and preserves versions on modification", async () => {
-    const conversation = ConversationSchema.parse((await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode: "TRAVEL" } })).json());
+    const { conversation, cookie } = await createConversation("TRAVEL");
     const send = async (text: string): Promise<string> => {
-      const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID() }, payload: { content: { type: "TEXT", text } } })).json());
+      const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID(), cookie }, payload: { content: { type: "TEXT", text } } })).json());
       return (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
     };
 
@@ -204,6 +196,7 @@ describe("conversation persistence", () => {
     const firstPlanEvents = await send("3");
     expect(firstPlanEvents).toContain("event: travel.plan.ready");
     expect(await send("第二天轻松一点")).toContain("event: travel.plan.ready");
+    expect(await send("就按这个出发")).toContain("event: travel.trip.confirmed");
     const weatherEvents = await send("今天天气如何");
     expect(weatherEvents).toContain("event: travel.answer");
     expect(weatherEvents).toContain("17–24°C");
@@ -226,16 +219,20 @@ describe("conversation persistence", () => {
     expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "exchange-rate" } })).toBeGreaterThan(0);
     expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "hotel" } })).toBeGreaterThan(0);
     expect(await prisma.tripResource.count({ where: { tripId: trip?.id, kind: "flight" } })).toBeGreaterThan(0);
+    expect(trip?.confirmedVersionId).toBe(trip?.versions[1]?.id);
+    const confirmed = await app.inject({ method: "GET", url: "/api/v1/trips/confirmed", headers: { cookie } });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()[0].title).toBe("首尔两日轻旅行");
 
-    const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore` });
+    const restored = await app.inject({ method: "POST", url: `/api/v1/trips/${trip?.id}/versions/${trip?.versions[0]?.id}/restore`, headers: { cookie } });
     expect(restored.statusCode).toBe(201);
     expect(restored.json().versionNumber).toBe(3);
     expect(await prisma.tripVersion.count({ where: { tripId: trip?.id } })).toBe(3);
   });
 
   it("previews an xhslink.cn guide without creating a trip version", async () => {
-    const conversation = ConversationSchema.parse((await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode: "TRAVEL" } })).json());
-    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID() }, payload: { content: { type: "TEXT", text: "https://xhslink.cn/o/example" } } })).json());
+    const { conversation, cookie } = await createConversation("TRAVEL");
+    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID(), cookie }, payload: { content: { type: "TEXT", text: "https://xhslink.cn/o/example" } } })).json());
     const events = await (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
     expect(events).toContain("event: travel.import.ready");
     expect(events).not.toContain("event: travel.plan.ready");

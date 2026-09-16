@@ -92,6 +92,20 @@
   font-size: 0.875rem;
 }
 
+.confirmAction {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--color-action);
+  color: var(--color-on-action);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.confirmAction:disabled { opacity: .58; cursor: default; }
+
 .translationText {
   margin: 0;
   font-size: clamp(1.7rem, 8vw, 2.6rem);

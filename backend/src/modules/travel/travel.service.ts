@@ -52,6 +52,15 @@ export class TravelService {
       const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
       const today = new Date().toISOString().slice(0, 10);
+      if (previous && this.isConfirmation(job.text)) {
+        await this.prisma.$transaction([
+          this.prisma.trip.update({ where: { id: trip.id }, data: { confirmedVersionId: previous.id, confirmedAt: new Date() } }),
+          this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: "行程已确认，已经放进“开始出发吧”。" } } }),
+        ]);
+        await this.appendEvent(job.jobId, "travel.trip.confirmed", { tripId: trip.id, versionId: previous.id });
+        await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_CONFIRMED" });
+        return;
+      }
       if ((job.images?.length ?? 0) > 0 || this.hasGuideUrl(job.text)) {
         const preview = await this.guideImport.parse({ tripId: trip.id, text: job.text, images: job.images ?? [] });
         await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { guideImportId: preview.id } } });
@@ -153,9 +162,9 @@ export class TravelService {
     }
   }
 
-  async restore(tripId: string, versionId: string): Promise<TripPlan> {
+  async restore(tripId: string, versionId: string, owner?: { userId?: string | null; guestId?: string | null }): Promise<TripPlan> {
     const source = await this.prisma.tripVersion.findFirst({
-      where: { id: versionId, tripId },
+      where: { id: versionId, tripId, ...(owner ? { trip: { conversation: owner.userId ? { userId: owner.userId } : { guestId: owner.guestId ?? "00000000-0000-0000-0000-000000000000" } } } : {}) },
       include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
     });
     if (!source) throw new NotFoundException("Trip version not found");
@@ -179,6 +188,31 @@ export class TravelService {
       include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
     });
     return this.toContract(tripId, restored);
+  }
+
+  async latestForConversation(conversationId: string): Promise<TripPlan | null> {
+    const trip = await this.prisma.trip.findUnique({ where: { conversationId }, include: { versions: { orderBy: { versionNumber: "desc" }, take: 1, include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } } } } });
+    const version = trip?.versions[0];
+    return trip && version ? this.toContract(trip.id, version) : null;
+  }
+
+  async confirm(tripId: string, versionId: string, owner: { userId?: string | null; guestId?: string | null }): Promise<{ ok: true }> {
+    const trip = await this.prisma.trip.findFirst({ where: { id: tripId, conversation: owner.userId ? { userId: owner.userId } : { guestId: owner.guestId ?? "00000000-0000-0000-0000-000000000000" }, versions: { some: { id: versionId } } } });
+    if (!trip) throw new NotFoundException("Trip not found");
+    await this.prisma.trip.update({ where: { id: tripId }, data: { confirmedVersionId: versionId, confirmedAt: new Date() } });
+    return { ok: true };
+  }
+
+  async confirmed(owner: { userId?: string | null; guestId?: string | null }): Promise<Array<{ tripId: string; title: string; confirmedAt: string; plan: TripPlan }>> {
+    const trips = await this.prisma.trip.findMany({ where: { confirmedAt: { not: null }, conversation: owner.userId ? { userId: owner.userId } : { guestId: owner.guestId ?? "00000000-0000-0000-0000-000000000000" } }, orderBy: { confirmedAt: "desc" }, include: { versions: { include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } } } } });
+    const results = trips.flatMap((trip) => { const version = trip.versions.find((item) => item.id === trip.confirmedVersionId); return version && trip.confirmedAt ? [{ tripId: trip.id, title: trip.title ?? version.title, confirmedAt: trip.confirmedAt.toISOString(), plan: this.toContract(trip.id, version) }] : []; });
+    const today = new Date().toISOString().slice(0, 10);
+    return results.sort((a, b) => {
+      const aDate = a.plan.days[0]?.date ?? "9999-12-31"; const bDate = b.plan.days[0]?.date ?? "9999-12-31";
+      const aPast = aDate < today; const bPast = bDate < today;
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return aPast ? bDate.localeCompare(aDate) : aDate.localeCompare(bDate);
+    });
   }
 
   private normalizeDays(days: Array<{ dayNumber: number; date: string | null; title: string; items: Array<Omit<PlannedItem, "place">> }>, startDate: string | null, expectedDays: number | null): PlannedDay[] {
@@ -215,6 +249,10 @@ export class TravelService {
 
   private isWeatherQuestion(text: string): boolean {
     return /(天气|气温|温度|下雨|降雨|带伞|冷不冷|热不热)/u.test(text);
+  }
+
+  private isConfirmation(text: string): boolean {
+    return /^(?:就按(?:这个|这份|它)?(?:行程)?(?:出发|走|安排)?|确认(?:这个|这份)?行程|确定了|确定这个行程|就这样(?:吧)?|开始出发(?:吧)?)[。！! ]*$/u.test(text.trim());
   }
 
   private isHotelQuestion(text: string): boolean {

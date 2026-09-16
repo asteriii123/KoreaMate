@@ -29,14 +29,61 @@ enum JobStatus {
 }
 
 model Conversation {
-  id        String           @id @default(uuid()) @db.Uuid
-  mode      ConversationMode
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  messages  Message[]
-  jobs      Job[]
+  id           String           @id @default(uuid()) @db.Uuid
+  mode         ConversationMode
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  messages     Message[]
+  jobs         Job[]
   translations Translation[]
   trip         Trip?
+  userId       String?          @db.Uuid
+  guestId      String?          @db.Uuid
+  user         User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guest        GuestIdentity?   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([guestId, updatedAt])
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  email         String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  sessions      Session[]
+}
+
+model GuestIdentity {
+  id            String         @id @default(uuid()) @db.Uuid
+  tokenHash     String         @unique
+  createdAt     DateTime       @default(now())
+  mergedAt      DateTime?
+  conversations Conversation[]
+}
+
+model EmailVerificationCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model Message {
@@ -56,9 +103,9 @@ model Message {
 }
 
 model Translation {
-  id                String   @id @default(uuid()) @db.Uuid
-  conversationId    String   @db.Uuid
-  sourceMessageId   String   @unique @db.Uuid
+  id                String       @id @default(uuid()) @db.Uuid
+  conversationId    String       @db.Uuid
+  sourceMessageId   String       @unique @db.Uuid
   sourceLanguage    String
   targetLanguage    String
   sourceText        String
@@ -66,10 +113,10 @@ model Translation {
   naturalExpression String
   pronunciation     String?
   politeness        String
-  provider           String
-  createdAt          DateTime @default(now())
-  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sourceMessage      Message @relation(fields: [sourceMessageId], references: [id], onDelete: Cascade)
+  provider          String
+  createdAt         DateTime     @default(now())
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessage     Message      @relation(fields: [sourceMessageId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
 }
@@ -100,24 +147,28 @@ model JobEvent {
 }
 
 model Trip {
-  id             String          @id @default(uuid()) @db.Uuid
-  conversationId String          @unique @db.Uuid
-  title          String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  requirement    TripRequirement?
-  versions       TripVersion[]
-  resources      TripResource[]
+  id                 String           @id @default(uuid()) @db.Uuid
+  conversationId     String           @unique @db.Uuid
+  title              String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  conversation       Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requirement        TripRequirement?
+  versions           TripVersion[]
+  resources          TripResource[]
+  confirmedVersionId String?          @db.Uuid
+  confirmedAt        DateTime?
+
+  @@index([confirmedAt])
 }
 
 model TripRequirement {
-  id        String   @id @default(uuid()) @db.Uuid
-  tripId    String   @unique @db.Uuid
-  data      Json
+  id           String   @id @default(uuid()) @db.Uuid
+  tripId       String   @unique @db.Uuid
+  data         Json
   pendingField String?
-  updatedAt DateTime @updatedAt
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime @updatedAt
+  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
 model TripVersion {
@@ -149,16 +200,16 @@ model ItineraryDay {
 }
 
 model ItineraryItem {
-  id            String       @id @default(uuid()) @db.Uuid
-  itineraryDayId String      @db.Uuid
-  startTime     String       @db.VarChar(5)
-  title         String
-  description   String
-  estimatedCost Decimal      @db.Decimal(12, 2)
-  currency      String       @db.VarChar(3)
-  placeId       String?      @db.Uuid
-  itineraryDay  ItineraryDay @relation(fields: [itineraryDayId], references: [id], onDelete: Cascade)
-  place         Place?       @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  id             String       @id @default(uuid()) @db.Uuid
+  itineraryDayId String       @db.Uuid
+  startTime      String       @db.VarChar(5)
+  title          String
+  description    String
+  estimatedCost  Decimal      @db.Decimal(12, 2)
+  currency       String       @db.VarChar(3)
+  placeId        String?      @db.Uuid
+  itineraryDay   ItineraryDay @relation(fields: [itineraryDayId], references: [id], onDelete: Cascade)
+  place          Place?       @relation(fields: [placeId], references: [id], onDelete: SetNull)
 
   @@index([itineraryDayId, startTime])
 }
@@ -209,15 +260,15 @@ model TripResource {
 }
 
 model ProviderCall {
-  id           String   @id @default(uuid()) @db.Uuid
-  provider     String
-  operation    String
-  status       String
-  durationMs   Int?
-  errorCode    String?
-  request      Json
-  response     Json?
-  createdAt    DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  provider   String
+  operation  String
+  status     String
+  durationMs Int?
+  errorCode  String?
+  request    Json
+  response   Json?
+  createdAt  DateTime @default(now())
 
   @@index([provider, createdAt])
 }

@@ -17,8 +17,8 @@ import {
   type FlightSearchResult,
 } from "@koreamate/contracts";
 import Link from "next/link";
-import { ChangeEvent, FormEvent, KeyboardEvent, useRef, useState } from "react";
-import { createConversation, jobEventsUrl, sendImportMessage, sendTextMessage } from "../../lib/api";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImportMessage, sendTextMessage } from "../../lib/api";
 import styles from "./conversation-screen.module.css";
 
 type ConversationScreenProps = {
@@ -72,6 +72,19 @@ export function ConversationScreen({
   const [images, setImages] = useState<string[]>([]);
   const [selectedImports, setSelectedImports] = useState<Record<string, number[]>>({});
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({});
+  const [confirmedTrips, setConfirmedTrips] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("conversation");
+    if (!id) return;
+    void getConversation(id).then((value) => {
+      if (value.mode !== mode) return;
+      conversationId.current = value.id;
+      const restored = value.timeline.filter((item): item is TimelineItem => Boolean(item && typeof item === "object" && "kind" in item));
+      if (value.latestPlan) restored.push({ id: value.latestPlan.versionId, kind: "plan", value: value.latestPlan });
+      setTimeline(restored);
+    }).catch(() => setError("这条历史记录暂时无法打开。"));
+  }, [mode]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -98,7 +111,7 @@ export function ConversationScreen({
       const accepted = isImport
         ? await sendImportMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
         : await sendTextMessage(conversationId.current, text, crypto.randomUUID());
-      const stream = new EventSource(jobEventsUrl(accepted.jobId));
+      const stream = new EventSource(jobEventsUrl(accepted.jobId), { withCredentials: true });
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
       stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
       stream.addEventListener("travel.started", () => setStatus("正在整理你的旅行需求…"));
@@ -125,6 +138,12 @@ export function ConversationScreen({
         const plan = TripPlanSchema.parse(event.data.plan);
         setTimeline((current) => [...current, { id: plan.versionId, kind: "plan", value: plan }]);
         setStatus("");
+      });
+      stream.addEventListener("travel.trip.confirmed", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const tripId = typeof event.data.tripId === "string" ? event.data.tripId : "";
+        if (tripId) setConfirmedTrips((current) => ({ ...current, [tripId]: true }));
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: "行程已确认，已经放进“开始出发吧”。" }]);
       });
       stream.addEventListener("travel.import.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
@@ -203,6 +222,11 @@ export function ConversationScreen({
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
     }
+  }
+
+  async function confirm(plan: TripPlan): Promise<void> {
+    await confirmTrip(plan.tripId, plan.versionId);
+    setConfirmedTrips((current) => ({ ...current, [plan.tripId]: true }));
   }
 
   return (
@@ -311,6 +335,7 @@ export function ConversationScreen({
                 </section>
               ))}
             </div>
+            <button className={styles.confirmAction} type="button" disabled={busy || confirmedTrips[plan.tripId]} onClick={() => void confirm(plan)}>{confirmedTrips[plan.tripId] ? "已放入开始出发吧" : "确认这个行程"}</button>
           </article>;
         })}
         {status ? <p className={styles.status}>{status}</p> : null}

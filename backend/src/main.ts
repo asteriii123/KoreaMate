@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ bodyLimit: 10 * 1024 * 1024 }));
   app.setGlobalPrefix("api/v1");
   const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000,http://localhost:3001").split(",");
-  app.enableCors({ origin: allowedOrigins });
+  app.enableCors({ origin: allowedOrigins, credentials: true });
   await app.listen(Number(process.env.PORT ?? 3100));
 }
 

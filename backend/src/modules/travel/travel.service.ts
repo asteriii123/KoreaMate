@@ -15,6 +15,8 @@ import { TripContextService, type TripContext } from "./trip-context.service.js"
 import { GuideImportService } from "./guide-import.service.js";
 import { HotelMcpProvider } from "./hotel-mcp.provider.js";
 import { FlightMcpProvider } from "./flight-mcp.provider.js";
+import { SavedPlacesService } from "../saved-places/saved-places.service.js";
+import type { Identity } from "../auth/identity.service.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -31,6 +33,7 @@ export class TravelService {
     private readonly guideImport: GuideImportService,
     private readonly hotels: HotelMcpProvider,
     private readonly flights: FlightMcpProvider,
+    private readonly savedPlaces: SavedPlacesService,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -52,6 +55,7 @@ export class TravelService {
       const contextualRequirements = applyContextAnswer(requirements, pendingField, job.text);
       const previous = trip.versions[0] ?? null;
       const today = new Date().toISOString().slice(0, 10);
+      if (await this.handleSavedPlaceIntent(job, previous?.id ?? null)) return;
       if (previous && this.isConfirmation(job.text)) {
         await this.prisma.$transaction([
           this.prisma.trip.update({ where: { id: trip.id }, data: { confirmedVersionId: previous.id, confirmedAt: new Date() } }),
@@ -262,6 +266,59 @@ export class TravelService {
 
   private isFlightQuestion(text: string): boolean {
     return /(航班|机票|飞机票|直飞|转机)/u.test(text);
+  }
+
+  private async handleSavedPlaceIntent(job: TravelJob, versionId: string | null): Promise<boolean> {
+    const text = job.text.trim();
+    const viewing = /(我收藏的|我的收藏|收藏了哪些|收藏了什么|收藏列表)/u.test(text);
+    const removing = /(取消收藏|不要收藏|移出收藏)/u.test(text);
+    const saving = /(收藏|记住|保存).*(地方|地点|景点|餐厅|咖啡|宫|洞|村|塔|岛|店)?/u.test(text);
+    if (!viewing && !removing && !saving) return false;
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: job.conversationId }, select: { userId: true, guestId: true } });
+    const identity: Identity = { userId: conversation?.userId ?? null, guestId: conversation?.guestId ?? null };
+    if (viewing) {
+      const { items } = await this.savedPlaces.list(identity);
+      const answer = items.length ? `你收藏了：${items.slice(0, 5).map((item) => item.nameZh ?? item.name).join("、")}。可以到“我的收藏”查看全部。` : "你还没有收藏地点，可以在行程里点爱心，或者告诉我“记住这个地方”。";
+      await this.savedPlaceResponse(job, "travel.saved-place.ready", { action: "list", answer }, answer);
+      return true;
+    }
+    if (!versionId) {
+      const answer = "当前还没有可收藏的核验地点，请先生成一份行程。";
+      await this.savedPlaceResponse(job, "travel.saved-place.question", { question: answer }, answer);
+      return true;
+    }
+    const candidates = await this.prisma.itineraryItem.findMany({ where: { itineraryDay: { tripVersionId: versionId }, placeId: { not: null } }, orderBy: [{ itineraryDay: { dayNumber: "asc" } }, { startTime: "asc" }], include: { place: true } });
+    const unique = [...new Map(candidates.filter((item) => item.place).map((item) => [item.placeId!, item])).values()];
+    const query = text.replace(/(请|帮我|把|将|一下|这个地方|这个地点|刚才那个|取消收藏|不要收藏|移出收藏|收藏|记住|保存|起来|吧|。|！|!)/gu, "").trim();
+    const matches = query
+      ? unique.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => name?.includes(query) || query.includes(name ?? "")))
+      : unique.slice(-1);
+    if (matches.length !== 1) {
+      const names = matches.length > 1 ? matches.slice(0, 3).map((item) => item.place?.nameZh ?? item.title).join("、") : "";
+      const question = names ? `你想操作哪个地点：${names}？` : "我没找到这个已核验地点，请说出行程卡片里的地点名称。";
+      await this.savedPlaceResponse(job, "travel.saved-place.question", { question }, question);
+      return true;
+    }
+    const selected = matches[0];
+    if (!selected?.place) return false;
+    const place = selected.place;
+    const displayName = place.nameZh ?? selected.title;
+    if (removing) {
+      await this.savedPlaces.removePlace(identity, place.id);
+      const answer = `已取消收藏“${displayName}”。`;
+      await this.savedPlaceResponse(job, "travel.saved-place.ready", { action: "removed", placeId: place.id, answer }, answer);
+    } else {
+      const savedPlace = await this.savedPlaces.create(identity, place.id);
+      const answer = `已收藏“${displayName}”。`;
+      await this.savedPlaceResponse(job, "travel.saved-place.ready", { action: "saved", savedPlace, answer }, answer);
+    }
+    return true;
+  }
+
+  private async savedPlaceResponse(job: TravelJob, type: "travel.saved-place.ready" | "travel.saved-place.question", data: Prisma.InputJsonValue, text: string): Promise<void> {
+    await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text } } });
+    await this.appendEvent(job.jobId, type, data);
+    await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_SAVED_PLACE" });
   }
 
   private async answerHotelQuestion(job: TravelJob, tripId: string, requirements: { destination: string | null; startDate: string | null; days: number | null; travelers: number | null } | null): Promise<void> {

@@ -12,9 +12,10 @@ import { GuideImportService } from "./guide-import.service.js";
 import { RemoteMcpClientService } from "./remote-mcp-client.service.js";
 import { HotelMcpProvider } from "./hotel-mcp.provider.js";
 import { FlightMcpProvider } from "./flight-mcp.provider.js";
+import { SavedPlacesModule } from "../saved-places/saved-places.module.js";
 
 @Module({
-  imports: [DatabaseModule, PlacesModule],
+  imports: [DatabaseModule, PlacesModule, SavedPlacesModule],
   controllers: [TravelController],
   providers: [
     TravelService,

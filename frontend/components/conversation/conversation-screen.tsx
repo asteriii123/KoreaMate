@@ -190,6 +190,22 @@ export function ConversationScreen({
         if (tripId) setConfirmedTrips((current) => ({ ...current, [tripId]: true }));
         setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: "行程已确认，已经放进“开始出发吧”。" }]);
       });
+      stream.addEventListener("travel.saved-place.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const answer = typeof event.data.answer === "string" ? event.data.answer : "收藏已更新。";
+        const savedPlace = event.data.savedPlace && typeof event.data.savedPlace === "object" ? event.data.savedPlace as { id?: unknown; placeId?: unknown } : null;
+        const removedPlaceId = typeof event.data.placeId === "string" ? event.data.placeId : null;
+        if (typeof savedPlace?.id === "string" && typeof savedPlace.placeId === "string") setSavedPlaces((current) => ({ ...current, [savedPlace.placeId as string]: savedPlace.id as string }));
+        if (removedPlaceId) setSavedPlaces((current) => { const next = { ...current }; delete next[removedPlaceId]; return next; });
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: answer }]);
+        setStatus("");
+      });
+      stream.addEventListener("travel.saved-place.question", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const question = typeof event.data.question === "string" ? event.data.question : "请告诉我想收藏哪个地点。";
+        setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: question }]);
+        setStatus("");
+      });
       stream.addEventListener("travel.import.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const preview = GuideImportPreviewSchema.parse(event.data.preview);

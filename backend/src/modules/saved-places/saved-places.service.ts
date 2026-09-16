@@ -43,6 +43,11 @@ export class SavedPlacesService {
     if (result.count === 0) throw new NotFoundException("Saved place not found");
   }
 
+  async removePlace(identity: Identity, placeId: string): Promise<boolean> {
+    const result = await this.prisma.savedPlace.deleteMany({ where: { placeId, ...this.owner(identity) } });
+    return result.count > 0;
+  }
+
   private owner(identity: Identity): Prisma.SavedPlaceWhereInput {
     if (identity.userId) return { userId: identity.userId };
     if (identity.guestId) return { guestId: identity.guestId };

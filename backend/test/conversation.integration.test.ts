@@ -198,6 +198,11 @@ describe("conversation persistence", () => {
     expect(await send("想去首尔")).toContain("event: travel.question");
     const firstPlanEvents = await send("3");
     expect(firstPlanEvents).toContain("event: travel.plan.ready");
+    const savedPlaceEvents = await send("记住景福宫");
+    expect(savedPlaceEvents).toContain("event: travel.saved-place.ready");
+    expect(savedPlaceEvents).not.toContain("event: travel.plan.ready");
+    expect(await prisma.tripVersion.count({ where: { trip: { conversationId: conversation.id } } })).toBe(1);
+    expect(await prisma.savedPlace.count()).toBeGreaterThan(0);
     expect(await send("第二天轻松一点")).toContain("event: travel.plan.ready");
     expect(await send("就按这个出发")).toContain("event: travel.trip.confirmed");
     const weatherEvents = await send("今天天气如何");

@@ -23,6 +23,7 @@ describe("shared contracts", () => {
       status: "ok",
       service: "koreamate-api",
       version: "3.0.0",
+      knowledgeEmbedding: { status: "disabled", model: "BAAI/bge-m3", modelVersion: "master", dimensions: 1024, loaded: null, reason: "NOT_CONFIGURED" },
     })).toBeTruthy();
   });
 

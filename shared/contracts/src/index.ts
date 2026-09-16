@@ -354,6 +354,14 @@ export const HealthResponseSchema = z.object({
   status: z.literal("ok"),
   service: z.literal("koreamate-api"),
   version: z.string().min(1),
+  knowledgeEmbedding: z.object({
+    status: z.enum(["available", "disabled", "unavailable"]),
+    model: z.string().min(1),
+    modelVersion: z.string().min(1),
+    dimensions: z.number().int().positive(),
+    loaded: z.boolean().nullable(),
+    reason: z.string().min(1).nullable(),
+  }).optional(),
 });
 
 export type ApiError = z.infer<typeof ApiErrorSchema>;

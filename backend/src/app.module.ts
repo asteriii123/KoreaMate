@@ -10,6 +10,7 @@ import { AuthModule } from "./modules/auth/auth.module.js";
 import { SpeechModule } from "./modules/speech/speech.module.js";
 import { SavedPlacesModule } from "./modules/saved-places/saved-places.module.js";
 import { MemoryModule } from "./modules/memory/memory.module.js";
+import { KnowledgeModule } from "./modules/knowledge/knowledge.module.js";
 
-@Module({ imports: [DatabaseModule, AuthModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule, MemoryModule] })
+@Module({ imports: [DatabaseModule, AuthModule, KnowledgeModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule, MemoryModule] })
 export class AppModule {}

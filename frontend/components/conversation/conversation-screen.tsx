@@ -444,7 +444,7 @@ export function ConversationScreen({
       </section>
 
       <div className={styles.composerWrap}>
-        <form className={`${styles.composer} ${mode === "TRANSLATION" ? styles.translationComposer : ""}`} onSubmit={submit}>
+        <form className={styles.composer} onSubmit={submit}>
           {mode === "TRAVEL" || mode === "TRANSLATION" ? <>
             <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void handleFiles(event)} />
             <button className={styles.attach} type="button" aria-label={mode === "TRAVEL" ? "上传攻略截图" : "上传需要翻译的照片"} onClick={() => fileInput.current?.click()}>

@@ -36,8 +36,14 @@ export const ImportMessageContentSchema = z.object({
   images: z.array(z.string().max(2_000_000).regex(/^data:image\/(?:jpeg|png|webp);base64,/)).max(4).default([]),
 }).refine((value) => value.text.length > 0 || value.images.length > 0, { message: "A link, text, or image is required" });
 
+export const ImageTranslationMessageContentSchema = z.object({
+  type: z.literal("IMAGE_TRANSLATION"),
+  text: z.string().trim().max(1_000).default(""),
+  images: z.array(z.string().max(2_000_000).regex(/^data:image\/(?:jpeg|png|webp);base64,/)).min(1).max(4),
+});
+
 export const SendMessageRequestSchema = z.object({
-  content: z.discriminatedUnion("type", [TextMessageContentSchema, ImportMessageContentSchema]),
+  content: z.discriminatedUnion("type", [TextMessageContentSchema, ImportMessageContentSchema, ImageTranslationMessageContentSchema]),
 });
 
 export const AcceptedMessageSchema = z.object({
@@ -50,6 +56,9 @@ export const JobEventTypeSchema = z.enum([
   "message.accepted",
   "translation.started",
   "translation.ready",
+  "translation.image.started",
+  "translation.image.ocr.ready",
+  "translation.image.ready",
   "travel.started",
   "travel.question",
   "travel.answer",
@@ -71,6 +80,22 @@ export const TranslationResultSchema = z.object({
   naturalExpression: z.string().min(1),
   pronunciation: z.string().nullable(),
   politeness: z.enum(["casual", "polite", "formal"]),
+});
+
+export const ImageTranslationResultSchema = z.object({
+  kind: z.enum(["text", "menu", "unknown"]),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  sourceText: z.string().min(1),
+  sections: z.array(z.object({ source: z.string().min(1), translation: z.string().min(1) })).max(40),
+  menuItems: z.array(z.object({
+    name: z.string().min(1),
+    originalName: z.string().min(1),
+    description: z.string(),
+    price: z.string().nullable(),
+  })).max(40),
+  uncertainText: z.array(z.string().min(1)).max(30),
+  provider: z.object({ ocr: z.string().min(1), translation: z.string().min(1) }),
 });
 
 export const ItineraryItemSchema = z.object({
@@ -247,6 +272,7 @@ export type GuideImportPreview = z.infer<typeof GuideImportPreviewSchema>;
 export type AcceptedMessage = z.infer<typeof AcceptedMessageSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type TranslationResult = z.infer<typeof TranslationResultSchema>;
+export type ImageTranslationResult = z.infer<typeof ImageTranslationResultSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
 export type WeatherContext = z.infer<typeof WeatherContextSchema>;
 export type ExchangeRateContext = z.infer<typeof ExchangeRateContextSchema>;

@@ -1,17 +1,20 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import type { ImageTranslationResult } from "@koreamate/contracts";
 import { PrismaService } from "../database/prisma.service.js";
 import {
   TRANSLATION_PROVIDER,
   TranslationProviderNotConfiguredError,
   type TranslationProvider,
 } from "./translation-provider.js";
+import { PaddleOcrProvider } from "./paddle-ocr.provider.js";
 
 type TranslationJob = {
   jobId: string;
   conversationId: string;
   sourceMessageId: string;
   text: string;
+  images?: string[];
 };
 
 @Injectable()
@@ -19,10 +22,15 @@ export class TranslationService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(TRANSLATION_PROVIDER) private readonly provider: TranslationProvider,
+    private readonly ocr: PaddleOcrProvider,
   ) {}
 
   async process(job: TranslationJob): Promise<void> {
     try {
+      if (job.images?.length) {
+        await this.processImages(job);
+        return;
+      }
       await this.appendEvent(job.jobId, "translation.started", { message: "正在理解这句话…" });
       const result = await this.provider.translate(job.text);
       const translation = await this.prisma.$transaction(async (transaction) => {
@@ -67,6 +75,23 @@ export class TranslationService {
           : "翻译服务暂时不可用，请稍后重试。",
       });
     }
+  }
+
+  private async processImages(job: TranslationJob): Promise<void> {
+    await this.appendEvent(job.jobId, "translation.image.started", { message: `正在识别 ${job.images?.length ?? 0} 张图片…` });
+    const results = [];
+    for (const image of job.images ?? []) results.push(await this.ocr.recognize(image));
+    const sourceText = results.map((value) => value.text).filter(Boolean).join("\n\n");
+    if (!sourceText.trim()) throw new Error("OCR returned no readable text");
+    const uncertainText = results.flatMap((value) => value.lines.filter((line) => line.confidence < 0.65).map((line) => line.text));
+    await this.appendEvent(job.jobId, "translation.image.ocr.ready", { message: "文字识别完成，正在整理中文…" });
+    const interpreted = await this.provider.interpretImageText(sourceText, uncertainText, job.text);
+    const result: ImageTranslationResult = { ...interpreted, sourceText, uncertainText, provider: { ocr: "paddleocr", translation: this.provider.name } };
+    await this.prisma.message.create({
+      data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { imageTranslation: result } },
+    });
+    await this.appendEvent(job.jobId, "translation.image.ready", { result });
+    await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "IMAGE_TRANSLATION_READY" });
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

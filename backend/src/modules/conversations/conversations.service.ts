@@ -42,8 +42,11 @@ export class ConversationsService {
     if (!conversation) throw new NotFoundException("Conversation not found");
     const timeline = conversation.messages.flatMap((message) => {
       const text = this.messageText(message.content);
-      const items: unknown[] = text ? [{ id: message.id, kind: message.role === "USER" ? "user" : "question", text }] : [];
+      const imageCount = this.messageImageCount(message.content);
+      const items: unknown[] = text || imageCount ? [{ id: message.id, kind: message.role === "USER" ? "user" : "question", text: text || `已上传 ${imageCount} 张照片` }] : [];
       if (message.translation) items.push({ id: message.translation.id, kind: "translation", value: { id: message.translation.id, sourceLanguage: message.translation.sourceLanguage, targetLanguage: message.translation.targetLanguage, sourceText: message.translation.sourceText, translatedText: message.translation.translatedText, naturalExpression: message.translation.naturalExpression, pronunciation: message.translation.pronunciation, politeness: message.translation.politeness } });
+      const imageTranslation = this.messageImageTranslation(message.content);
+      if (imageTranslation) items.push({ id: message.id, kind: "imageTranslation", value: imageTranslation });
       return items;
     });
     return { id: conversation.id, mode: conversation.mode, createdAt: conversation.createdAt.toISOString(), timeline, latestPlan: await this.travel.latestForConversation(id) };
@@ -100,6 +103,7 @@ export class ConversationsService {
           conversationId,
           sourceMessageId: result.message.id,
           text: request.content.text,
+          images: request.content.type === "IMAGE_TRANSLATION" ? request.content.images : [],
         });
       } else {
         void this.travel.process({
@@ -141,5 +145,15 @@ export class ConversationsService {
   private messageText(content: Prisma.JsonValue | undefined): string | null {
     if (!content || typeof content !== "object" || Array.isArray(content)) return null;
     return "text" in content && typeof content.text === "string" ? content.text : null;
+  }
+
+  private messageImageCount(content: Prisma.JsonValue | undefined): number {
+    if (!content || typeof content !== "object" || Array.isArray(content) || !("images" in content) || !Array.isArray(content.images)) return 0;
+    return content.images.length;
+  }
+
+  private messageImageTranslation(content: Prisma.JsonValue | undefined): Prisma.JsonValue | null {
+    if (!content || typeof content !== "object" || Array.isArray(content) || !("imageTranslation" in content)) return null;
+    return content.imageTranslation ?? null;
   }
 }

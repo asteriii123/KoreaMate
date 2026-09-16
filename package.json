@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @koreamate/web -- -p 3001\" \"npm run dev -w @koreamate/api\"",
+    "dev:ocr": ".venv-ocr\\Scripts\\python.exe infrastructure\\paddleocr\\server.py",
+    "dev:all": "concurrently -n web,api,ocr -c cyan,magenta,yellow \"npm run dev -w @koreamate/web -- -p 3001\" \"npm run dev -w @koreamate/api\" \"npm run dev:ocr\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "npm run test:integration -w @koreamate/api",

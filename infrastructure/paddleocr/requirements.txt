@@ -1,0 +1,2 @@
+paddleocr-mcp==0.8.5
+paddlepaddle

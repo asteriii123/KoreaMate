@@ -6,9 +6,11 @@ import {
   HotelSearchResultSchema,
   FlightSearchResultSchema,
   TranslationResultSchema,
+  ImageTranslationResultSchema,
   TripPlanSchema,
   type ConversationMode,
   type TranslationResult,
+  type ImageTranslationResult,
   type TripPlan,
   type GuideImportPreview,
   type HotelOption,
@@ -18,7 +20,7 @@ import {
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImportMessage, sendTextMessage } from "../../lib/api";
+import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImageTranslationMessage, sendImportMessage, sendTextMessage } from "../../lib/api";
 import styles from "./conversation-screen.module.css";
 
 type ConversationScreenProps = {
@@ -33,6 +35,7 @@ type TimelineItem =
   | { id: string; kind: "user"; text: string }
   | { id: string; kind: "question"; text: string }
   | { id: string; kind: "translation"; value: TranslationResult }
+  | { id: string; kind: "imageTranslation"; value: ImageTranslationResult }
   | { id: string; kind: "import"; value: GuideImportPreview }
   | { id: string; kind: "hotels"; value: HotelSearchResult }
   | { id: string; kind: "flights"; value: FlightSearchResult }
@@ -101,24 +104,35 @@ export function ConversationScreen({
     setStatus("正在接收你的想法…");
     setInput("");
     setImages([]);
-    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text: text || `已上传 ${attachedImages.length} 张攻略截图` }]);
+    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text: text || `已上传 ${attachedImages.length} 张${mode === "TRANSLATION" ? "待翻译照片" : "攻略截图"}` }]);
 
     try {
       if (!conversationId.current) {
         conversationId.current = (await createConversation(mode)).id;
       }
-      const isImport = isGuideImport(text, attachedImages.length);
-      const accepted = isImport
+      const isImageTranslation = mode === "TRANSLATION" && attachedImages.length > 0;
+      const isImport = mode === "TRAVEL" && isGuideImport(text, attachedImages.length);
+      const accepted = isImageTranslation
+        ? await sendImageTranslationMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
+        : isImport
         ? await sendImportMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
         : await sendTextMessage(conversationId.current, text, crypto.randomUUID());
       const stream = new EventSource(jobEventsUrl(accepted.jobId), { withCredentials: true });
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
       stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
+      stream.addEventListener("translation.image.started", () => setStatus("正在识别图片里的韩文…"));
+      stream.addEventListener("translation.image.ocr.ready", () => setStatus("文字识别完成，正在整理中文…"));
       stream.addEventListener("travel.started", () => setStatus("正在整理你的旅行需求…"));
       stream.addEventListener("translation.ready", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
         const translation = TranslationResultSchema.parse(event.data.translation);
         setTimeline((current) => [...current, { id: translation.id, kind: "translation", value: translation }]);
+        setStatus("");
+      });
+      stream.addEventListener("translation.image.ready", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const result = ImageTranslationResultSchema.parse(event.data.result);
+        setTimeline((current) => [...current, { id: event.eventId, kind: "imageTranslation", value: result }]);
         setStatus("");
       });
       stream.addEventListener("travel.question", (rawEvent) => {
@@ -263,6 +277,20 @@ export function ConversationScreen({
             ) : null}
           </article>;
           }
+          if (item.kind === "imageTranslation") {
+            const result = item.value;
+            return <article className={styles.imageTranslation} key={item.id}>
+              <p className={styles.translationLabel}>{result.kind === "menu" ? "菜单已翻译" : "图片已翻译"}</p>
+              <h2>{result.title}</h2>
+              <p className={styles.imageSummary}>{result.summary}</p>
+              {result.menuItems.length ? <ul className={styles.menuItems}>{result.menuItems.map((dish, index) => <li key={`${dish.originalName}-${index}`}>
+                <div><strong>{dish.name}</strong><span>{dish.originalName}</span>{dish.description ? <p>{dish.description}</p> : null}</div>
+                {dish.price ? <b>{dish.price}</b> : null}
+              </li>)}</ul> : null}
+              {result.sections.length ? <div className={styles.translationSections}>{result.sections.map((section, index) => <div key={`${section.source}-${index}`}><small>{section.source}</small><p>{section.translation}</p></div>)}</div> : null}
+              {result.uncertainText.length ? <details className={styles.uncertain}><summary>有 {result.uncertainText.length} 处文字不太确定</summary><p>{result.uncertainText.join(" · ")}</p></details> : null}
+            </article>;
+          }
           if (item.kind === "import") {
             const preview = item.value;
             const verified = preview.items.filter((value) => value.verified).length;
@@ -343,9 +371,9 @@ export function ConversationScreen({
 
       <div className={styles.composerWrap}>
         <form className={styles.composer} onSubmit={submit}>
-          {mode === "TRAVEL" ? <>
+          {mode === "TRAVEL" || mode === "TRANSLATION" ? <>
             <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void handleFiles(event)} />
-            <button className={styles.attach} type="button" aria-label="上传攻略截图" onClick={() => fileInput.current?.click()}>
+            <button className={styles.attach} type="button" aria-label={mode === "TRAVEL" ? "上传攻略截图" : "上传需要翻译的照片"} onClick={() => fileInput.current?.click()}>
               <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
           </> : null}
@@ -366,7 +394,7 @@ export function ConversationScreen({
             </svg>
           </button>
         </form>
-        {images.length > 0 ? <p className={styles.attachmentStatus}>已选择 {images.length} 张攻略截图</p> : null}
+        {images.length > 0 ? <p className={styles.attachmentStatus}>已选择 {images.length} 张{mode === "TRAVEL" ? "攻略截图" : "待翻译照片"}</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
       </div>
     </main>

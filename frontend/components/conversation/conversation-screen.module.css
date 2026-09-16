@@ -86,6 +86,30 @@
   background: var(--color-surface);
 }
 
+.imageTranslation {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+}
+
+.imageTranslation h2 { margin: 0; letter-spacing: -0.03em; }
+.imageSummary { color: var(--color-muted); line-height: 1.6; }
+.menuItems { list-style: none; margin: 20px 0 0; padding: 0; }
+.menuItems li { display: flex; justify-content: space-between; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--color-border); }
+.menuItems div { display: grid; gap: 4px; }
+.menuItems span, .menuItems p { color: var(--color-muted); font-size: .86rem; }
+.menuItems p { margin: 2px 0 0; line-height: 1.45; }
+.menuItems b { white-space: nowrap; }
+.translationSections { display: grid; gap: 12px; margin-top: 20px; }
+.translationSections div { padding: 14px 16px; border-radius: 16px; background: var(--color-canvas); }
+.translationSections small { color: var(--color-muted); }
+.translationSections p { margin: 6px 0 0; line-height: 1.55; }
+.uncertain { margin-top: 18px; color: var(--color-muted); font-size: .85rem; }
+.uncertain summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.uncertain p { line-height: 1.55; }
+
 .translationLabel {
   margin: 0 0 8px;
   color: var(--color-muted);

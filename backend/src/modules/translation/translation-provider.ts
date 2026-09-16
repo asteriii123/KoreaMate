@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ImageTranslationResultSchema } from "@koreamate/contracts";
 
 export const TRANSLATION_PROVIDER = Symbol("TRANSLATION_PROVIDER");
 
@@ -16,6 +17,7 @@ export type ProviderTranslation = z.infer<typeof ProviderTranslationSchema>;
 export interface TranslationProvider {
   readonly name: string;
   translate(text: string): Promise<ProviderTranslation>;
+  interpretImageText(text: string, uncertainText: string[], note?: string): Promise<z.infer<typeof ImageTranslationResultSchema>>;
 }
 
 export class TranslationProviderNotConfiguredError extends Error {

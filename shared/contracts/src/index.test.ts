@@ -5,6 +5,7 @@ import {
   HealthResponseSchema,
   SendMessageRequestSchema,
   TranslationResultSchema,
+  ImageTranslationResultSchema,
   TripPlanSchema,
   PlaceResultSchema,
 } from "./index.js";
@@ -44,6 +45,11 @@ describe("shared contracts", () => {
   it("accepts a bounded guide screenshot import", () => {
     expect(SendMessageRequestSchema.parse({ content: { type: "IMPORT", text: "", images: ["data:image/jpeg;base64,YQ=="] } }).content.type).toBe("IMPORT");
     expect(() => SendMessageRequestSchema.parse({ content: { type: "IMPORT", text: "", images: [] } })).toThrow();
+  });
+
+  it("accepts image translation requests and structured results", () => {
+    expect(SendMessageRequestSchema.parse({ content: { type: "IMAGE_TRANSLATION", text: "", images: ["data:image/png;base64,YQ=="] } }).content.type).toBe("IMAGE_TRANSLATION");
+    expect(ImageTranslationResultSchema.parse({ kind: "menu", title: "菜单翻译", summary: "识别到 1 道菜", sourceText: "비빔밥", sections: [], menuItems: [{ name: "拌饭", originalName: "비빔밥", description: "韩式拌饭", price: "₩10,000" }], uncertainText: [], provider: { ocr: "paddleocr", translation: "openai-compatible" } }).menuItems[0]?.name).toBe("拌饭");
   });
 
   it("validates a structured translation result", () => {

@@ -19,8 +19,10 @@ import {
   type FlightSearchResult,
 } from "@koreamate/contracts";
 import Link from "next/link";
-import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { confirmTrip, createConversation, getConversation, jobEventsUrl, sendImageTranslationMessage, sendImportMessage, sendTextMessage } from "../../lib/api";
+import { createSpeechRecognition, recognitionLanguage, speechRecognitionSupported, type SpeechRecognitionController } from "../../lib/speech-recognition";
+import { speakKorean, speechSynthesisSupported, stopSpeaking } from "../../lib/speech-synthesis";
 import styles from "./conversation-screen.module.css";
 
 type ConversationScreenProps = {
@@ -40,6 +42,9 @@ type TimelineItem =
   | { id: string; kind: "hotels"; value: HotelSearchResult }
   | { id: string; kind: "flights"; value: FlightSearchResult }
   | { id: string; kind: "plan"; value: TripPlan };
+
+const subscribeToStaticCapability = () => () => undefined;
+const serverCapability = () => false;
 
 export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing: boolean): boolean {
   return key === "Enter" && !shiftKey && !isComposing;
@@ -67,6 +72,7 @@ export function ConversationScreen({
 }: ConversationScreenProps) {
   const conversationId = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const recognition = useRef<SpeechRecognitionController | null>(null);
   const [input, setInput] = useState("");
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [status, setStatus] = useState("");
@@ -76,6 +82,16 @@ export function ConversationScreen({
   const [selectedImports, setSelectedImports] = useState<Record<string, number[]>>({});
   const [expandedImports, setExpandedImports] = useState<Record<string, boolean>>({});
   const [confirmedTrips, setConfirmedTrips] = useState<Record<string, boolean>>({});
+  const [listening, setListening] = useState(false);
+  const [speechError, setSpeechError] = useState("");
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const canRecognizeSpeech = useSyncExternalStore(subscribeToStaticCapability, speechRecognitionSupported, serverCapability);
+  const canSpeak = useSyncExternalStore(subscribeToStaticCapability, speechSynthesisSupported, serverCapability);
+
+  useEffect(() => () => {
+    recognition.current?.destroy();
+    stopSpeaking();
+  }, []);
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("conversation");
@@ -238,6 +254,43 @@ export function ConversationScreen({
     }
   }
 
+  function toggleListening(): void {
+    if (listening) {
+      recognition.current?.stop();
+      setListening(false);
+      return;
+    }
+    setSpeechError("");
+    recognition.current?.destroy();
+    const controller = createSpeechRecognition({
+      language: recognitionLanguage(input),
+      onResult: (text) => setInput((current) => `${current}${current.trim() ? " " : ""}${text}`),
+      onError: (message) => { setSpeechError(message); setListening(false); },
+      onEnd: () => setListening(false),
+    });
+    if (!controller) {
+      setSpeechError("当前浏览器暂不支持语音输入。");
+      return;
+    }
+    recognition.current = controller;
+    try {
+      controller.start();
+      setListening(true);
+    } catch {
+      setSpeechError("语音识别暂时不可用，仍可直接输入文字。");
+    }
+  }
+
+  function toggleSpeaking(id: string, text: string): void {
+    if (speakingId === id) {
+      stopSpeaking();
+      setSpeakingId(null);
+      return;
+    }
+    setSpeakingId(id);
+    if (!speakKorean(text, () => setSpeakingId(null))) setSpeakingId(null);
+  }
+
   async function confirm(plan: TripPlan): Promise<void> {
     await confirmTrip(plan.tripId, plan.versionId);
     setConfirmedTrips((current) => ({ ...current, [plan.tripId]: true }));
@@ -274,6 +327,12 @@ export function ConversationScreen({
             ) : null}
             {translation.pronunciation ? (
               <p className={styles.translationDetail}>发音提示：{translation.pronunciation}</p>
+            ) : null}
+            {translation.targetLanguage === "ko" && canSpeak ? (
+              <button className={styles.speakAction} type="button" onClick={() => toggleSpeaking(item.id, translation.naturalExpression)} aria-label={speakingId === item.id ? "停止朗读韩语" : "朗读韩语"}>
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5zM15 9a4 4 0 010 6M18 6a8 8 0 010 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                {speakingId === item.id ? "停止朗读" : "朗读韩语"}
+              </button>
             ) : null}
           </article>;
           }
@@ -370,7 +429,7 @@ export function ConversationScreen({
       </section>
 
       <div className={styles.composerWrap}>
-        <form className={styles.composer} onSubmit={submit}>
+        <form className={`${styles.composer} ${mode === "TRANSLATION" ? styles.translationComposer : ""}`} onSubmit={submit}>
           {mode === "TRAVEL" || mode === "TRANSLATION" ? <>
             <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void handleFiles(event)} />
             <button className={styles.attach} type="button" aria-label={mode === "TRAVEL" ? "上传攻略截图" : "上传需要翻译的照片"} onClick={() => fileInput.current?.click()}>
@@ -388,6 +447,9 @@ export function ConversationScreen({
             rows={1}
             maxLength={4_000}
           />
+          {mode === "TRANSLATION" ? <button className={`${styles.mic} ${listening ? styles.micActive : ""}`} type="button" disabled={!canRecognizeSpeech || busy} aria-label={!canRecognizeSpeech ? "当前浏览器不支持语音输入" : listening ? "停止语音输入" : "开始语音输入"} aria-pressed={listening} onClick={toggleListening}>
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          </button> : null}
           <button className={styles.send} type="submit" disabled={(!input.trim() && images.length === 0) || busy} aria-label="发送">
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M12 19V5m0 0l-6 6m6-6l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -395,6 +457,9 @@ export function ConversationScreen({
           </button>
         </form>
         {images.length > 0 ? <p className={styles.attachmentStatus}>已选择 {images.length} 张{mode === "TRAVEL" ? "攻略截图" : "待翻译照片"}</p> : null}
+        {mode === "TRANSLATION" && listening ? <p className={styles.speechStatus} role="status" aria-atomic="true">正在听，再点一次麦克风停止。语音识别由浏览器提供。</p> : null}
+        {mode === "TRANSLATION" && !canRecognizeSpeech ? <p className={styles.speechStatus}>当前浏览器暂不支持语音输入，可继续使用文字或图片。</p> : null}
+        {speechError ? <p className={styles.error} role="alert">{speechError}</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
       </div>
     </main>

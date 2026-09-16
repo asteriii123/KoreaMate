@@ -144,6 +144,21 @@
   line-height: 1.6;
 }
 
+.speakAction {
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-weight: 650;
+  cursor: pointer;
+}
+
 .plan {
   margin-top: 24px;
   padding: clamp(20px, 5vw, 32px);
@@ -279,6 +294,8 @@
   box-shadow: 0 14px 40px rgb(15 23 42 / 12%);
 }
 
+.translationComposer { grid-template-columns: auto 1fr auto auto; }
+
 .attach {
   width: 44px;
   height: 44px;
@@ -291,11 +308,41 @@
   place-items: center;
 }
 
+.mic {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.mic:hover { background: var(--color-canvas); color: var(--color-text); }
+.mic:disabled { cursor: default; opacity: .38; }
+.micActive { background: var(--color-action); color: var(--color-on-action); }
+.micActive:hover { background: var(--color-action); color: var(--color-on-action); }
+
+.speakAction:focus-visible,
+.mic:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 2px;
+}
+
 .attachmentStatus {
   width: min(100%, 680px);
   margin: 8px auto 0;
   color: var(--color-muted);
   font-size: 0.85rem;
+}
+
+.speechStatus {
+  width: min(100%, 680px);
+  margin: 8px auto 0;
+  color: var(--color-muted);
+  font-size: .85rem;
 }
 
 .importCard {

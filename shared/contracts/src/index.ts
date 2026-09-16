@@ -122,6 +122,34 @@ export const CitationSchema = z.object({
   if (value.status !== "assistant_suggestion" && (value.provider === "koreamate" || !value.fetchedAt)) context.addIssue({ code: "custom", message: "External citations require a provider and fetch time" });
 });
 
+export const KnowledgeKindSchema = z.enum(["official_fact", "personal_experience"]);
+
+export const KnowledgeReferenceSchema = z.object({
+  chunkId: z.uuid(),
+  kind: KnowledgeKindSchema,
+  trust: z.enum(["verified", "assistant_suggestion"]),
+  title: z.string().min(1).max(160),
+  content: z.string().min(1).max(1_200),
+  provider: z.string().min(1).max(80),
+  sourceUrl: z.string().url().refine((value) => new URL(value).protocol === "https:", "Source URL must use HTTPS").nullable(),
+  fetchedAt: z.iso.datetime().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
+  stale: z.boolean(),
+  score: z.number().min(0).max(1),
+}).superRefine((value, context) => {
+  if (value.kind === "official_fact" && (value.trust !== "verified" || !value.fetchedAt)) {
+    context.addIssue({ code: "custom", message: "Official facts require verified trust and a fetch time" });
+  }
+  if (value.kind === "personal_experience" && value.trust !== "assistant_suggestion") {
+    context.addIssue({ code: "custom", message: "Personal experiences cannot claim verified trust" });
+  }
+});
+
+export const TravelKnowledgeContextSchema = z.object({
+  officialFacts: z.array(KnowledgeReferenceSchema.refine((value) => value.kind === "official_fact")).max(6),
+  personalExperiences: z.array(KnowledgeReferenceSchema.refine((value) => value.kind === "personal_experience")).max(4),
+});
+
 export const ItineraryItemSchema = z.object({
   id: z.uuid(),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -356,3 +384,6 @@ export type MemoryKind = z.infer<typeof MemoryKindSchema>;
 export type MemoryCandidate = z.infer<typeof MemoryCandidateSchema>;
 export type UserMemory = z.infer<typeof UserMemorySchema>;
 export type Citation = z.infer<typeof CitationSchema>;
+export type KnowledgeKind = z.infer<typeof KnowledgeKindSchema>;
+export type KnowledgeReference = z.infer<typeof KnowledgeReferenceSchema>;
+export type TravelKnowledgeContext = z.infer<typeof TravelKnowledgeContextSchema>;

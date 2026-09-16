@@ -13,6 +13,8 @@ import {
   CreateSavedPlaceRequestSchema,
   MemoryCandidatesSchema,
   CitationSchema,
+  KnowledgeReferenceSchema,
+  TravelKnowledgeContextSchema,
 } from "./index.js";
 
 describe("shared contracts", () => {
@@ -109,5 +111,15 @@ describe("shared contracts", () => {
     expect(CitationSchema.parse({ status: "verified", provider: "kakao", label: "已核验 · Kakao", sourceUrl: "https://place.map.kakao.com/1", fetchedAt: "2026-09-16T10:00:00.000Z", expiresAt: "2026-09-17T10:00:00.000Z", stale: false }).provider).toBe("kakao");
     expect(() => CitationSchema.parse({ status: "assistant_suggestion", provider: "koreamate", label: "小助理建议", sourceUrl: "https://example.com", fetchedAt: null, expiresAt: null, stale: false })).toThrow();
     expect(() => CitationSchema.parse({ status: "verified", provider: "kakao", label: "已核验", sourceUrl: "http://place.map.kakao.com/1", fetchedAt: "2026-09-16T10:00:00.000Z", expiresAt: null, stale: false })).toThrow();
+  });
+
+  it("keeps official facts and personal experiences in separate trust lanes", () => {
+    const official = { chunkId: "92de6446-a3cc-40ed-9f6d-c0f76209f632", kind: "official_fact", trust: "verified", title: "景福宫", content: "경복궁位于首尔钟路区。", provider: "kakao", sourceUrl: "https://place.map.kakao.com/1", fetchedAt: "2026-09-16T10:00:00.000Z", expiresAt: "2026-09-17T10:00:00.000Z", stale: false, score: 0.91 } as const;
+    const personal = { ...official, chunkId: "8ba7d65d-f8d2-481e-8d42-86651a835777", kind: "personal_experience", trust: "assistant_suggestion", provider: "user-guide", sourceUrl: null, fetchedAt: null, expiresAt: null } as const;
+    expect(TravelKnowledgeContextSchema.parse({ officialFacts: [official], personalExperiences: [personal] }).personalExperiences).toHaveLength(1);
+    expect(() => KnowledgeReferenceSchema.parse({ ...personal, trust: "verified" })).toThrow();
+    expect(() => KnowledgeReferenceSchema.parse({ ...official, fetchedAt: null })).toThrow();
+    expect(() => KnowledgeReferenceSchema.parse({ ...official, sourceUrl: "http://place.map.kakao.com/1" })).toThrow();
+    expect(() => TravelKnowledgeContextSchema.parse({ officialFacts: Array(7).fill(official), personalExperiences: [] })).toThrow();
   });
 });

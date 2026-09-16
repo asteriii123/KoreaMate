@@ -17,6 +17,7 @@ import {
   type HotelSearchResult,
   type FlightOption,
   type FlightSearchResult,
+  type Citation,
 } from "@koreamate/contracts";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -417,8 +418,8 @@ export function ConversationScreen({
               <button className={styles.importAction} type="button" disabled={busy || selected.length === 0} onClick={() => void createPlanFromImport(preview)}>用已选 {selected.length} 个地点生成行程</button>
             </article>;
           }
-          if (item.kind === "hotels") return <HotelCards key={item.id} hotels={item.value.hotels} title={`${item.value.destination}住宿候选`} />;
-          if (item.kind === "flights") return <FlightCards key={item.id} flights={item.value.flights} title={`${item.value.fromCity} → ${item.value.toCity}`} />;
+          if (item.kind === "hotels") return <HotelCards key={item.id} hotels={item.value.hotels} title={`${item.value.destination}住宿候选`} citation={item.value.citation} />;
+          if (item.kind === "flights") return <FlightCards key={item.id} flights={item.value.flights} title={`${item.value.fromCity} → ${item.value.toCity}`} citation={item.value.citation} />;
           const plan = item.value;
           const weather = weatherText(plan);
           return <article className={styles.plan} key={item.id}>
@@ -432,8 +433,8 @@ export function ConversationScreen({
             <p className={styles.planSummary}>{plan.summary}</p>
             {weather || plan.exchangeRate ? (
               <div className={styles.tripContext}>
-                {weather ? <span>{weather}</span> : null}
-                {plan.exchangeRate ? <span>1 {plan.exchangeRate.base} ≈ {plan.exchangeRate.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })} KRW · {plan.exchangeRate.date}</span> : null}
+                {weather ? <span>{weather}{plan.weather?.status === "available" ? <CitationBadge citation={plan.weather.citation} /> : null}</span> : null}
+                {plan.exchangeRate ? <span>1 {plan.exchangeRate.base} ≈ {plan.exchangeRate.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })} KRW · {plan.exchangeRate.date}<CitationBadge citation={plan.exchangeRate.citation} /></span> : null}
               </div>
             ) : null}
             {plan.hotels.length > 0 ? <HotelCards hotels={plan.hotels} title="住宿候选" embedded /> : null}
@@ -455,6 +456,7 @@ export function ConversationScreen({
                           <div className={styles.placeMeta}>
                             {item.place.address ? <span>{item.place.address}</span> : null}
                             {item.place.mapUrl ? <a href={item.place.mapUrl} target="_blank" rel="noreferrer">地图</a> : null}
+                            <CitationBadge citation={item.place.citation} />
                             <button className={styles.savePlace} type="button" aria-pressed={Boolean(savedPlaces[item.place.id])} aria-label={savedPlaces[item.place.id] ? "取消收藏" : "收藏地点"} onClick={() => void toggleSaved(item.place!.id)}>{savedPlaces[item.place.id] ? "♥ 已收藏" : "♡ 收藏"}</button>
                           </div>
                         ) : null}
@@ -530,10 +532,19 @@ function resizeImage(file: File): Promise<string> {
   });
 }
 
-function HotelCards({ hotels, title, embedded = false }: { hotels: HotelOption[]; title: string; embedded?: boolean }) {
+function CitationBadge({ citation }: { citation?: Citation | null }) {
+  if (!citation) return null;
+  const fetchedAt = citation.fetchedAt ? new Date(citation.fetchedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
+  return <details className={styles.citation}>
+    <summary>{citation.label}</summary>
+    <div>{citation.stale ? <strong>数据可能已变化</strong> : null}{fetchedAt ? <span>更新于 {fetchedAt}</span> : <span>由 KoreaMate 小助理根据你的需求整理</span>}{citation.sourceUrl ? <a href={citation.sourceUrl} target="_blank" rel="noreferrer">查看来源</a> : null}</div>
+  </details>;
+}
+
+function HotelCards({ hotels, title, embedded = false, citation }: { hotels: HotelOption[]; title: string; embedded?: boolean; citation?: Citation | null }) {
   return <section className={embedded ? styles.hotelSection : styles.hotelCard}>
     <p className={styles.translationLabel}>实时酒店参考</p>
-    <h2>{title}</h2>
+    <h2>{title}</h2><CitationBadge citation={citation} />
     <div className={styles.hotelList}>{hotels.slice(0, 3).map((hotel) => <article key={hotel.id} className={styles.hotelItem}>
       <div><strong>{hotel.name}</strong><p>{hotel.starRating ? `${hotel.starRating} 星 · ` : ""}{hotel.recommendation || hotel.address}</p></div>
       <div className={styles.hotelPrice}><strong>约 {hotel.lowestPrice.toLocaleString()} {hotel.currency}</strong><span>每晚起</span></div>
@@ -543,10 +554,10 @@ function HotelCards({ hotels, title, embedded = false }: { hotels: HotelOption[]
   </section>;
 }
 
-function FlightCards({ flights, title, embedded = false }: { flights: FlightOption[]; title: string; embedded?: boolean }) {
+function FlightCards({ flights, title, embedded = false, citation }: { flights: FlightOption[]; title: string; embedded?: boolean; citation?: Citation | null }) {
   return <section className={embedded ? styles.hotelSection : styles.hotelCard}>
     <p className={styles.translationLabel}>实时航班参考</p>
-    <h2>{title}</h2>
+    <h2>{title}</h2><CitationBadge citation={citation} />
     <div className={styles.hotelList}>{flights.slice(0, 3).map((flight) => <article key={flight.id} className={styles.flightItem}>
       <div className={styles.flightRoute}><strong>{flight.flightNumbers}</strong><span>{flight.direct ? "直飞" : `${flight.transferCity ?? "中转"}转机`}</span></div>
       <div className={styles.flightTimes}><time>{flight.departureAt.slice(11, 16)}</time><span>{flight.duration}</span><time>{flight.arrivalAt.slice(11, 16)}</time></div>

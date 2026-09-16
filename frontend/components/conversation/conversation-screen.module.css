@@ -448,3 +448,9 @@
   border: 0;
 }
 .savePlace{min-width:44px;min-height:44px;padding:0 12px;border:1px solid var(--color-border);border-radius:22px;background:transparent;color:inherit;cursor:pointer}.savePlace[aria-pressed="true"]{background:var(--color-action);color:var(--color-on-action)}
+.citation { position: relative; display: inline-block; margin-left: 6px; vertical-align: middle; font-size: .72rem; }
+.citation summary { min-height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); color: var(--color-muted); cursor: pointer; list-style: none; white-space: nowrap; }
+.citation summary::-webkit-details-marker { display: none; }
+.citation[open] > div { position: absolute; z-index: 4; left: 0; top: calc(100% + 6px); min-width: 190px; display: grid; gap: 6px; padding: 12px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 12px 32px rgb(15 23 42 / 14%); color: var(--color-muted); }
+.citation strong { color: var(--color-error); }
+.citation a { color: var(--color-text); font-weight: 650; }

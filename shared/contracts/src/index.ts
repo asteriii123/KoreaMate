@@ -109,6 +109,19 @@ export const ImageTranslationResultSchema = z.object({
   provider: z.object({ ocr: z.string().min(1), translation: z.string().min(1) }),
 });
 
+export const CitationSchema = z.object({
+  status: z.enum(["verified", "live_reference", "assistant_suggestion"]),
+  provider: z.enum(["kakao", "korea-tourism", "open-meteo", "frankfurter", "rollinggo-hotel", "variflight", "koreamate"]),
+  label: z.string().min(1).max(80),
+  sourceUrl: z.string().url().refine((value) => new URL(value).protocol === "https:", "Source URL must use HTTPS").nullable(),
+  fetchedAt: z.iso.datetime().nullable(),
+  expiresAt: z.iso.datetime().nullable(),
+  stale: z.boolean(),
+}).superRefine((value, context) => {
+  if (value.status === "assistant_suggestion" && (value.provider !== "koreamate" || value.sourceUrl || value.fetchedAt)) context.addIssue({ code: "custom", message: "Assistant suggestions cannot claim an external source" });
+  if (value.status !== "assistant_suggestion" && (value.provider === "koreamate" || !value.fetchedAt)) context.addIssue({ code: "custom", message: "External citations require a provider and fetch time" });
+});
+
 export const ItineraryItemSchema = z.object({
   id: z.uuid(),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -125,6 +138,7 @@ export const ItineraryItemSchema = z.object({
     longitude: z.number().min(-180).max(180),
     mapUrl: z.url().nullable(),
     saved: z.boolean().default(false),
+    citation: CitationSchema.nullable().optional(),
   }).nullable().default(null),
 });
 
@@ -175,6 +189,7 @@ export const WeatherContextSchema = z.discriminatedUnion("status", [
     status: z.literal("available"),
     source: z.literal("open-meteo"),
     fetchedAt: z.iso.datetime(),
+    citation: CitationSchema.nullable().optional(),
     days: z.array(z.object({
       date: z.iso.date(),
       temperatureMin: z.number(),
@@ -196,6 +211,7 @@ export const ExchangeRateContextSchema = z.object({
   rate: z.number().positive(),
   date: z.iso.date(),
   fetchedAt: z.iso.datetime(),
+  citation: CitationSchema.nullable().optional(),
 });
 
 export const HotelOptionSchema = z.object({
@@ -218,6 +234,7 @@ export const HotelSearchResultSchema = z.object({
   checkOut: z.iso.date(),
   fetchedAt: z.iso.datetime(),
   hotels: z.array(HotelOptionSchema).max(6),
+  citation: CitationSchema.nullable().optional(),
 });
 
 export const FlightOptionSchema = z.object({
@@ -239,6 +256,7 @@ export const FlightSearchResultSchema = z.object({
   departureDate: z.iso.date(),
   fetchedAt: z.iso.datetime(),
   flights: z.array(FlightOptionSchema).max(8),
+  citation: CitationSchema.nullable().optional(),
 });
 
 export const TripPlanSchema = z.object({
@@ -337,3 +355,4 @@ export type SavedPlace = z.infer<typeof SavedPlaceSchema>;
 export type MemoryKind = z.infer<typeof MemoryKindSchema>;
 export type MemoryCandidate = z.infer<typeof MemoryCandidateSchema>;
 export type UserMemory = z.infer<typeof UserMemorySchema>;
+export type Citation = z.infer<typeof CitationSchema>;

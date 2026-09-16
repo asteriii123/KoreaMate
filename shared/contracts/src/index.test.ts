@@ -12,6 +12,7 @@ import {
   SavedPlaceSchema,
   CreateSavedPlaceRequestSchema,
   MemoryCandidatesSchema,
+  CitationSchema,
 } from "./index.js";
 
 describe("shared contracts", () => {
@@ -102,5 +103,11 @@ describe("shared contracts", () => {
     expect(MemoryCandidatesSchema.parse({ candidates: [{ kind: "pace", value: "relaxed", confidence: 0.92 }] }).candidates).toHaveLength(1);
     expect(() => MemoryCandidatesSchema.parse({ candidates: [{ kind: "unknown", value: "x", confidence: 1 }] })).toThrow();
     expect(() => MemoryCandidatesSchema.parse({ candidates: [{ kind: "interest", value: "美食", confidence: 0.5 }] })).toThrow();
+  });
+
+  it("validates real citations without allowing assistant source claims", () => {
+    expect(CitationSchema.parse({ status: "verified", provider: "kakao", label: "已核验 · Kakao", sourceUrl: "https://place.map.kakao.com/1", fetchedAt: "2026-09-16T10:00:00.000Z", expiresAt: "2026-09-17T10:00:00.000Z", stale: false }).provider).toBe("kakao");
+    expect(() => CitationSchema.parse({ status: "assistant_suggestion", provider: "koreamate", label: "小助理建议", sourceUrl: "https://example.com", fetchedAt: null, expiresAt: null, stale: false })).toThrow();
+    expect(() => CitationSchema.parse({ status: "verified", provider: "kakao", label: "已核验", sourceUrl: "http://place.map.kakao.com/1", fetchedAt: "2026-09-16T10:00:00.000Z", expiresAt: null, stale: false })).toThrow();
   });
 });

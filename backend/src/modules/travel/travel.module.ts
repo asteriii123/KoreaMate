@@ -14,9 +14,10 @@ import { HotelMcpProvider } from "./hotel-mcp.provider.js";
 import { FlightMcpProvider } from "./flight-mcp.provider.js";
 import { SavedPlacesModule } from "../saved-places/saved-places.module.js";
 import { MemoryModule } from "../memory/memory.module.js";
+import { CitationsModule } from "../citations/citations.module.js";
 
 @Module({
-  imports: [DatabaseModule, PlacesModule, SavedPlacesModule, MemoryModule],
+  imports: [DatabaseModule, PlacesModule, SavedPlacesModule, MemoryModule, CitationsModule],
   controllers: [TravelController],
   providers: [
     TravelService,

@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { WeatherContextSchema, type WeatherContext } from "@koreamate/contracts";
 import { z } from "zod";
+import { CitationFactory } from "../citations/citation.factory.js";
 
 const ResponseSchema = z.object({
   daily: z.object({
@@ -14,6 +15,8 @@ const ResponseSchema = z.object({
 
 @Injectable()
 export class OpenMeteoWeatherProvider {
+  constructor(private readonly citations: CitationFactory) {}
+
   async forecast(input: { latitude: number; longitude: number; startDate: string | null; tripDays: number; today: string }): Promise<WeatherContext> {
     if (!input.startDate) return { status: "pending", reason: "date_required" };
     const startOffset = this.daysBetween(input.today, input.startDate);
@@ -30,10 +33,17 @@ export class OpenMeteoWeatherProvider {
     const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
     if (!response.ok) throw new Error(`Open-Meteo returned HTTP ${response.status}`);
     const payload = ResponseSchema.parse(await response.json());
+    const fetchedAt = new Date();
     return WeatherContextSchema.parse({
       status: "available",
       source: "open-meteo",
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: fetchedAt.toISOString(),
+      citation: this.citations.external({
+        provider: "open-meteo",
+        sourceUrl: "https://open-meteo.com/",
+        fetchedAt,
+        expiresAt: new Date(fetchedAt.getTime() + 60 * 60 * 1_000),
+      }),
       days: payload.daily.time.map((date, index) => ({
         date,
         temperatureMin: payload.daily.temperature_2m_min[index],

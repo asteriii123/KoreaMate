@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { HotelSearchResultSchema, type HotelSearchResult } from "@koreamate/contracts";
 import { z } from "zod";
 import { RemoteMcpClientService } from "./remote-mcp-client.service.js";
+import { CitationFactory } from "../citations/citation.factory.js";
 
 const RawHotelSchema = z.object({
   hotelId: z.union([z.string(), z.number()]),
@@ -20,7 +21,7 @@ type ToolResult = { content?: Array<{ type: string; text?: string }>; isError?: 
 
 @Injectable()
 export class HotelMcpProvider {
-  constructor(private readonly mcp: RemoteMcpClientService) {}
+  constructor(private readonly mcp: RemoteMcpClientService, private readonly citations: CitationFactory) {}
 
   get configured(): boolean { return Boolean(process.env.HOTEL_MCP_URL); }
 
@@ -32,6 +33,7 @@ export class HotelMcpProvider {
     const text = result.content?.find((item) => item.type === "text")?.text;
     if (!text) throw new Error("Hotel MCP returned no data");
     const raw = RawResultSchema.parse(JSON.parse(text));
-    return HotelSearchResultSchema.parse({ provider: "rollinggo-hotel", destination: raw.destination, checkIn: raw.checkIn, checkOut: raw.checkOut, fetchedAt: new Date().toISOString(), hotels: raw.hotels.slice(0, 6).map((hotel) => ({ id: String(hotel.hotelId), name: hotel.name, starRating: hotel.starRating ?? null, lowestPrice: hotel.lowestPrice, currency: hotel.currency, address: hotel.address ?? null, imageUrl: hotel.imageUrl ?? null, bookingUrl: hotel.bookingUrl ?? null, recommendation: hotel.recommendReason, cancellation: hotel.cancellation })) });
+    const fetchedAt = new Date();
+    return HotelSearchResultSchema.parse({ provider: "rollinggo-hotel", destination: raw.destination, checkIn: raw.checkIn, checkOut: raw.checkOut, fetchedAt: fetchedAt.toISOString(), citation: this.citations.external({ provider: "rollinggo-hotel", fetchedAt, expiresAt: new Date(fetchedAt.getTime() + 30 * 60 * 1_000) }), hotels: raw.hotels.slice(0, 6).map((hotel) => ({ id: String(hotel.hotelId), name: hotel.name, starRating: hotel.starRating ?? null, lowestPrice: hotel.lowestPrice, currency: hotel.currency, address: hotel.address ?? null, imageUrl: hotel.imageUrl ?? null, bookingUrl: hotel.bookingUrl ?? null, recommendation: hotel.recommendReason, cancellation: hotel.cancellation })) });
   }
 }

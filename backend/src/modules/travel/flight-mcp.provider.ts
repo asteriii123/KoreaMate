@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { FlightSearchResultSchema, type FlightOption, type FlightSearchResult } from "@koreamate/contracts";
 import { z } from "zod";
 import { RemoteMcpClientService } from "./remote-mcp-client.service.js";
+import { CitationFactory } from "../citations/citation.factory.js";
 
 const RawEnvelopeSchema = z.object({ code: z.literal(200), data: z.string() });
 type ToolResult = { content?: Array<{ type: string; text?: string }>; isError?: boolean };
@@ -13,7 +14,7 @@ const CITY_CODES: Record<string, string> = {
 
 @Injectable()
 export class FlightMcpProvider {
-  constructor(private readonly mcp: RemoteMcpClientService) {}
+  constructor(private readonly mcp: RemoteMcpClientService, private readonly citations: CitationFactory) {}
   get configured(): boolean { return Boolean(process.env.FLIGHT_MCP_URL && process.env.VARIFLIGHT_API_KEY); }
 
   cityCode(city: string): string | null {
@@ -33,7 +34,8 @@ export class FlightMcpProvider {
     const raw = RawEnvelopeSchema.parse(JSON.parse(text));
     const flights = this.parseFlights(raw.data);
     if (flights.length === 0) throw new Error("Flight MCP returned no parseable flights");
-    return FlightSearchResultSchema.parse({ provider: "variflight", fromCity: input.fromCity, toCity: input.toCity, departureDate: input.departureDate, fetchedAt: new Date().toISOString(), flights });
+    const fetchedAt = new Date();
+    return FlightSearchResultSchema.parse({ provider: "variflight", fromCity: input.fromCity, toCity: input.toCity, departureDate: input.departureDate, fetchedAt: fetchedAt.toISOString(), citation: this.citations.external({ provider: "variflight", fetchedAt, expiresAt: new Date(fetchedAt.getTime() + 15 * 60 * 1_000) }), flights });
   }
 
   private parseFlights(text: string): FlightOption[] {

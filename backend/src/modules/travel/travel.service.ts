@@ -20,11 +20,12 @@ import { SavedPlacesService } from "../saved-places/saved-places.service.js";
 import type { Identity } from "../auth/identity.service.js";
 import { MemoryService } from "../memory/memory.service.js";
 import { OpenAiCompatibleMemoryExtractor } from "../memory/openai-compatible-memory.extractor.js";
+import { CitationFactory } from "../citations/citation.factory.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
 type PlannedDay = { dayNumber: number; date: string | null; title: string; items: PlannedItem[]; estimatedCost: number };
-type StoredItem = { id: string; startTime: string; title: string; description: string; estimatedCost: unknown; currency: string; place: null | { id: string; name: string; nameZh: string | null; address: string | null; latitude: unknown; longitude: unknown; sources: Array<{ sourceUrl: string | null }> } };
+type StoredItem = { id: string; startTime: string; title: string; description: string; estimatedCost: unknown; currency: string; place: null | { id: string; name: string; nameZh: string | null; address: string | null; latitude: unknown; longitude: unknown; sources: Array<{ provider: string; sourceUrl: string | null; fetchedAt: Date; expiresAt: Date }> } };
 
 @Injectable()
 export class TravelService {
@@ -39,6 +40,7 @@ export class TravelService {
     private readonly savedPlaces: SavedPlacesService,
     private readonly memories: MemoryService,
     private readonly memoryExtractor: OpenAiCompatibleMemoryExtractor,
+    private readonly citations: CitationFactory,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -163,7 +165,7 @@ export class TravelService {
               })),
             },
           },
-          include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
+          include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: { in: ["kakao", "korea-tourism"] } }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
         });
         await transaction.trip.update({ where: { id: trip.id }, data: { title: result.title } });
         await transaction.message.create({
@@ -186,7 +188,7 @@ export class TravelService {
   async restore(tripId: string, versionId: string, owner?: { userId?: string | null; guestId?: string | null }): Promise<TripPlan> {
     const source = await this.prisma.tripVersion.findFirst({
       where: { id: versionId, tripId, ...(owner ? { trip: { conversation: owner.userId ? { userId: owner.userId } : { guestId: owner.guestId ?? "00000000-0000-0000-0000-000000000000" } } } : {}) },
-      include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
+      include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: { in: ["kakao", "korea-tourism"] } }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
     });
     if (!source) throw new NotFoundException("Trip version not found");
     const aggregate = await this.prisma.tripVersion.aggregate({ where: { tripId }, _max: { versionNumber: true } });
@@ -206,13 +208,13 @@ export class TravelService {
           items: { create: day.items.map((item) => ({ startTime: item.startTime, title: item.title, description: item.description, estimatedCost: item.estimatedCost, currency: item.currency, placeId: item.placeId })) },
         })) },
       },
-      include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
+      include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: { in: ["kakao", "korea-tourism"] } }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } },
     });
     return this.toContract(tripId, restored);
   }
 
   async latestForConversation(conversationId: string): Promise<TripPlan | null> {
-    const trip = await this.prisma.trip.findUnique({ where: { conversationId }, include: { versions: { orderBy: { versionNumber: "desc" }, take: 1, include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } } } } });
+    const trip = await this.prisma.trip.findUnique({ where: { conversationId }, include: { versions: { orderBy: { versionNumber: "desc" }, take: 1, include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: { in: ["kakao", "korea-tourism"] } }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } } } } });
     const version = trip?.versions[0];
     return trip && version ? this.toContract(trip.id, version) : null;
   }
@@ -225,7 +227,7 @@ export class TravelService {
   }
 
   async confirmed(owner: { userId?: string | null; guestId?: string | null }): Promise<Array<{ tripId: string; title: string; confirmedAt: string; plan: TripPlan }>> {
-    const trips = await this.prisma.trip.findMany({ where: { confirmedAt: { not: null }, conversation: owner.userId ? { userId: owner.userId } : { guestId: owner.guestId ?? "00000000-0000-0000-0000-000000000000" } }, orderBy: { confirmedAt: "desc" }, include: { versions: { include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: "kakao" }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } } } } });
+    const trips = await this.prisma.trip.findMany({ where: { confirmedAt: { not: null }, conversation: owner.userId ? { userId: owner.userId } : { guestId: owner.guestId ?? "00000000-0000-0000-0000-000000000000" } }, orderBy: { confirmedAt: "desc" }, include: { versions: { include: { days: { orderBy: { dayNumber: "asc" }, include: { items: { orderBy: { startTime: "asc" }, include: { place: { include: { sources: { where: { provider: { in: ["kakao", "korea-tourism"] } }, orderBy: { fetchedAt: "desc" }, take: 1 } } } } } } } } } } });
     const results = trips.flatMap((trip) => { const version = trip.versions.find((item) => item.id === trip.confirmedVersionId); return version && trip.confirmedAt ? [{ tripId: trip.id, title: trip.title ?? version.title, confirmedAt: trip.confirmedAt.toISOString(), plan: this.toContract(trip.id, version) }] : []; });
     const today = new Date().toISOString().slice(0, 10);
     return results.sort((a, b) => {
@@ -510,7 +512,11 @@ export class TravelService {
   }
 
   private toContract(tripId: string, version: { id: string; versionNumber: number; title: string; summary: string; currency: string; totalCost: unknown; days: Array<{ dayNumber: number; date: Date | null; title: string; estimatedCost: unknown; items: StoredItem[] }> }, context: TripContext = { weather: null, exchangeRate: null }, hotels: HotelOption[] = [], flights: FlightOption[] = []): TripPlan {
-    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, flights, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => ({ id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { id: item.place.id, name: item.place.name, nameZh: item.place.nameZh, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: item.place.sources[0]?.sourceUrl ?? null, saved: false } : null })) })) };
+    return { tripId, versionId: version.id, versionNumber: version.versionNumber, title: version.title, summary: version.summary, currency: version.currency, totalEstimatedCost: Number(version.totalCost), weather: context.weather, exchangeRate: context.exchangeRate, hotels, flights, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, estimatedCost: Number(day.estimatedCost), items: day.items.map((item) => {
+      const source = item.place?.sources[0];
+      const provider = source?.provider === "kakao" || source?.provider === "korea-tourism" ? source.provider : null;
+      return { id: item.id, time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost), currency: item.currency, place: item.place ? { id: item.place.id, name: item.place.name, nameZh: item.place.nameZh, address: item.place.address, latitude: Number(item.place.latitude), longitude: Number(item.place.longitude), mapUrl: source?.sourceUrl ?? null, saved: false, citation: source && provider ? this.citations.external({ provider, sourceUrl: source.sourceUrl, fetchedAt: source.fetchedAt, expiresAt: source.expiresAt }) : this.citations.assistant() } : null };
+    }) })) };
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

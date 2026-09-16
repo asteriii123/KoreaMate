@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
-import { getCurrentUser, logout, requestEmailCode, verifyEmailCode } from "../../lib/api";
+import type { UserMemory } from "@koreamate/contracts";
+import { deleteMemory, getCurrentUser, listMemories, logout, requestEmailCode, verifyEmailCode } from "../../lib/api";
 import styles from "./app-shell.module.css";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -11,11 +12,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [memories, setMemories] = useState<UserMemory[] | null>(null);
+  const [accountError, setAccountError] = useState("");
 
   useEffect(() => { void Promise.resolve(localStorage.getItem("koreamate-sidebar") === "collapsed").then(setCollapsed); void getCurrentUser().then(setUser).catch(() => undefined); }, []);
   function toggle(): void { const next = !collapsed; setCollapsed(next); localStorage.setItem("koreamate-sidebar", next ? "collapsed" : "expanded"); }
   const closeMobile = () => setMobileOpen(false);
+  function openAccount(): void { setAccountOpen(true); setAccountError(""); setMemories(null); void listMemories().then((value) => setMemories(value.items)).catch(() => { setMemories([]); setAccountError("偏好暂时无法加载，请稍后重试。"); }); }
+  async function removeMemory(item: UserMemory): Promise<void> { setMemories((current) => current?.filter((value) => value.id !== item.id) ?? []); try { await deleteMemory(item.id); } catch { setMemories((current) => [item, ...(current ?? [])]); setAccountError("删除失败，请重试。"); } }
 
   return <div className={`${styles.shell} ${collapsed ? styles.isCollapsed : ""}`}>
     <button className={styles.mobileMenu} type="button" onClick={() => setMobileOpen(true)} aria-label="打开菜单">☰</button>
@@ -27,11 +33,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Link className={pathname === "/history" ? styles.active : ""} href="/history" onClick={closeMobile}><span aria-hidden="true">◷</span><span className={styles.label}>历史记录</span></Link>
         <Link className={pathname === "/saved" ? styles.active : ""} href="/saved" onClick={closeMobile}><span aria-hidden="true">♡</span><span className={styles.label}>我的收藏</span></Link>
       </nav>
-      <div className={styles.account}>{user ? <><button type="button" className={styles.accountButton} title={user.email}><span className={styles.avatar}>{user.email[0]?.toUpperCase()}</span><span className={styles.label}>{user.email}</span></button><button className={`${styles.logout} ${styles.label}`} type="button" onClick={() => void logout().then(() => { setUser(null); window.dispatchEvent(new Event("koreamate-auth-changed")); })}>退出</button></> : <button type="button" className={styles.accountButton} onClick={() => setLoginOpen(true)}><span className={styles.avatar}>人</span><span className={styles.label}>登录</span></button>}</div>
+      <div className={styles.account}><button type="button" className={styles.accountButton} title={user?.email ?? "账户与偏好"} onClick={openAccount}><span className={styles.avatar}>{user?.email[0]?.toUpperCase() ?? "人"}</span><span className={styles.label}>{user?.email ?? "账户与偏好"}</span></button></div>
     </aside>
     <div className={styles.content}>{children}</div>
     {loginOpen ? <LoginDialog onClose={() => setLoginOpen(false)} onLogin={(value) => { setUser(value); setLoginOpen(false); window.dispatchEvent(new Event("koreamate-auth-changed")); }} /> : null}
+    {accountOpen ? <AccountDialog user={user} memories={memories} error={accountError} onClose={() => setAccountOpen(false)} onLogin={() => { setAccountOpen(false); setLoginOpen(true); }} onDelete={(item) => void removeMemory(item)} onLogout={() => void logout().then(() => { setUser(null); setAccountOpen(false); window.dispatchEvent(new Event("koreamate-auth-changed")); })} /> : null}
   </div>;
+}
+
+const memoryLabels: Record<UserMemory["kind"], string> = { departure_city: "常用出发城市", budget_level: "预算偏好", pace: "行程节奏", interest: "兴趣", constraint: "需要注意" };
+const memoryValues: Record<string, string> = { economy: "经济省钱", balanced: "注重性价比", comfortable: "舒适品质", relaxed: "轻松", packed: "紧凑" };
+
+function AccountDialog({ user, memories, error, onClose, onLogin, onDelete, onLogout }: { user: { id: string; email: string } | null; memories: UserMemory[] | null; error: string; onClose: () => void; onLogin: () => void; onDelete: (item: UserMemory) => void; onLogout: () => void }) {
+  return <div className={styles.dialogBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className={`${styles.dialog} ${styles.accountDialog}`} role="dialog" aria-modal="true" aria-labelledby="account-title"><button className={styles.dialogClose} type="button" onClick={onClose} aria-label="关闭">×</button><p className={styles.eyebrow}>KoreaMate</p><h2 id="account-title">我的偏好</h2><p>{user ? user.email : "登录后可跨设备保留行程和偏好。"}</p>{error ? <p className={styles.dialogError}>{error}</p> : null}{memories === null ? <p>正在加载…</p> : memories.length === 0 ? <div className={styles.memoryEmpty}>还没有长期偏好，正常规划时我会逐渐了解你。</div> : <ul className={styles.memoryList}>{memories.map((item) => <li key={item.id}><div><small>{memoryLabels[item.kind]}</small><strong>{memoryValues[item.value] ?? item.value}</strong></div><button type="button" aria-label={`删除${memoryLabels[item.kind]}：${memoryValues[item.value] ?? item.value}`} onClick={() => onDelete(item)}>删除</button></li>)}</ul>}<div className={styles.accountActions}>{user ? <button type="button" onClick={onLogout}>退出登录</button> : <button type="button" onClick={onLogin}>登录并保留偏好</button>}</div></section></div>;
 }
 
 function LoginDialog({ onClose, onLogin }: { onClose: () => void; onLogin: (user: { id: string; email: string }) => void }) {

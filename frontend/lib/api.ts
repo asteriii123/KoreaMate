@@ -9,6 +9,8 @@ import {
   SavedPlaceListSchema,
   SavedPlaceSchema,
   type SavedPlace,
+  UserMemoryListSchema,
+  type UserMemory,
 } from "@koreamate/contracts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3100/api/v1";
@@ -126,4 +128,12 @@ export function savePlace(placeId: string, note?: string | null): Promise<SavedP
 
 export async function deleteSavedPlace(id: string): Promise<void> {
   await requestJson(`/saved-places/${id}`, { method: "DELETE" }, () => undefined);
+}
+
+export function listMemories(): Promise<{ items: UserMemory[] }> {
+  return requestJson("/memories", { method: "GET" }, (value) => UserMemoryListSchema.parse(value));
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  await requestJson(`/memories/${id}`, { method: "DELETE" }, () => undefined);
 }

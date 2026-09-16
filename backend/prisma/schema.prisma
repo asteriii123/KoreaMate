@@ -36,6 +36,29 @@ enum MemoryKind {
   constraint
 }
 
+enum KnowledgeKind {
+  OFFICIAL_FACT
+  PERSONAL_EXPERIENCE
+}
+
+enum KnowledgeVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum KnowledgeStatus {
+  PENDING
+  READY
+  FAILED
+  DELETED
+}
+
+enum EmbeddingStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 model Conversation {
   id           String           @id @default(uuid()) @db.Uuid
   mode         ConversationMode
@@ -63,6 +86,7 @@ model User {
   sessions      Session[]
   savedPlaces   SavedPlace[]
   memories      UserMemory[]
+  knowledgeDocuments KnowledgeDocument[]
 }
 
 model GuestIdentity {
@@ -73,6 +97,7 @@ model GuestIdentity {
   conversations Conversation[]
   savedPlaces   SavedPlace[]
   memories      UserMemory[]
+  knowledgeDocuments KnowledgeDocument[]
 }
 
 model EmailVerificationCode {
@@ -296,6 +321,7 @@ model PlaceSource {
   fetchedAt  DateTime @default(now())
   expiresAt  DateTime
   place      Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  knowledgeDocument KnowledgeDocument?
 
   @@unique([provider, externalId])
   @@index([placeId, fetchedAt])
@@ -311,8 +337,78 @@ model TripResource {
   fetchedAt DateTime @default(now())
   expiresAt DateTime
   trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  knowledgeDocument KnowledgeDocument?
 
   @@index([tripId, kind])
+}
+
+model KnowledgeDocument {
+  id              String              @id @default(uuid()) @db.Uuid
+  kind            KnowledgeKind
+  visibility      KnowledgeVisibility
+  userId          String?             @db.Uuid
+  guestId         String?             @db.Uuid
+  placeSourceId   String?             @unique @db.Uuid
+  tripResourceId  String?             @unique @db.Uuid
+  provider        String
+  externalId      String?
+  sourceUrl       String?
+  title           String
+  rawContent      String              @db.Text
+  sourceFetchedAt DateTime?
+  sourceExpiresAt DateTime?
+  contentHash     String              @db.VarChar(64)
+  status          KnowledgeStatus     @default(PENDING)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  user            User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guest           GuestIdentity?      @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  placeSource     PlaceSource?        @relation(fields: [placeSourceId], references: [id], onDelete: Cascade)
+  tripResource    TripResource?       @relation(fields: [tripResourceId], references: [id], onDelete: Cascade)
+  chunks          KnowledgeChunk[]
+
+  @@unique([provider, externalId])
+  @@unique([userId, contentHash])
+  @@unique([guestId, contentHash])
+  @@index([visibility, kind, status])
+  @@index([userId, status])
+  @@index([guestId, status])
+}
+
+model KnowledgeChunk {
+  id          String               @id @default(uuid()) @db.Uuid
+  documentId  String               @db.Uuid
+  sequence    Int
+  content     String               @db.Text
+  metadata    Json
+  tokenCount  Int
+  contentHash String               @db.VarChar(64)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  document    KnowledgeDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embeddings  KnowledgeEmbedding[]
+
+  @@unique([documentId, sequence])
+  @@index([documentId, contentHash])
+}
+
+model KnowledgeEmbedding {
+  id            String          @id @default(uuid()) @db.Uuid
+  chunkId       String          @db.Uuid
+  model         String
+  modelVersion  String
+  dimensions    Int
+  embedding     Unsupported("vector(1024)")?
+  status        EmbeddingStatus @default(PENDING)
+  attempts      Int             @default(0)
+  lastErrorCode String?
+  embeddedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  chunk         KnowledgeChunk  @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, model, modelVersion])
+  @@index([model, modelVersion, status])
 }
 
 model ProviderCall {

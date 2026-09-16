@@ -11,6 +11,7 @@ import {
   PlaceResultSchema,
   SavedPlaceSchema,
   CreateSavedPlaceRequestSchema,
+  MemoryCandidatesSchema,
 } from "./index.js";
 
 describe("shared contracts", () => {
@@ -95,5 +96,11 @@ describe("shared contracts", () => {
   it("validates saved places and bounded notes", () => {
     expect(SavedPlaceSchema.parse({ id: "8ba7d65d-f8d2-481e-8d42-86651a835777", placeId: "92de6446-a3cc-40ed-9f6d-c0f76209f632", name: "경복궁", nameZh: "景福宫", address: null, latitude: 37.5796, longitude: 126.9769, mapUrl: null, note: null, createdAt: "2026-09-16T10:00:00.000Z", updatedAt: "2026-09-16T10:00:00.000Z" }).nameZh).toBe("景福宫");
     expect(() => CreateSavedPlaceRequestSchema.parse({ placeId: "invalid", note: "a".repeat(241) })).toThrow();
+  });
+
+  it("accepts only bounded, confident memory candidates", () => {
+    expect(MemoryCandidatesSchema.parse({ candidates: [{ kind: "pace", value: "relaxed", confidence: 0.92 }] }).candidates).toHaveLength(1);
+    expect(() => MemoryCandidatesSchema.parse({ candidates: [{ kind: "unknown", value: "x", confidence: 1 }] })).toThrow();
+    expect(() => MemoryCandidatesSchema.parse({ candidates: [{ kind: "interest", value: "美食", confidence: 0.5 }] })).toThrow();
   });
 });

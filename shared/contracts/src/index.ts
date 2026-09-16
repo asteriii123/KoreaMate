@@ -69,6 +69,8 @@ export const JobEventTypeSchema = z.enum([
   "travel.trip.confirmed",
   "travel.saved-place.ready",
   "travel.saved-place.question",
+  "travel.memory.updated",
+  "travel.memory.question",
   "job.completed",
   "job.failed",
 ]);
@@ -142,6 +144,23 @@ export const SavedPlaceSchema = z.object({
 export const SavedPlaceListSchema = z.object({ items: z.array(SavedPlaceSchema) });
 export const CreateSavedPlaceRequestSchema = z.object({ placeId: z.uuid(), note: z.string().trim().max(240).nullable().optional() });
 export const UpdateSavedPlaceRequestSchema = z.object({ note: z.string().trim().max(240).nullable() });
+
+export const MemoryKindSchema = z.enum(["departure_city", "budget_level", "pace", "interest", "constraint"]);
+export const MemoryCandidateSchema = z.object({
+  kind: MemoryKindSchema,
+  value: z.string().trim().min(1).max(120),
+  confidence: z.number().min(0.8).max(1),
+});
+export const MemoryCandidatesSchema = z.object({ candidates: z.array(MemoryCandidateSchema).max(8) });
+export const UserMemorySchema = z.object({
+  id: z.uuid(),
+  kind: MemoryKindSchema,
+  value: z.string().min(1).max(120),
+  confidence: z.number().min(0).max(1),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export const UserMemoryListSchema = z.object({ items: z.array(UserMemorySchema) });
 
 export const ItineraryDaySchema = z.object({
   dayNumber: z.number().int().positive(),
@@ -315,3 +334,6 @@ export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
 export type User = z.infer<typeof UserSchema>;
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 export type SavedPlace = z.infer<typeof SavedPlaceSchema>;
+export type MemoryKind = z.infer<typeof MemoryKindSchema>;
+export type MemoryCandidate = z.infer<typeof MemoryCandidateSchema>;
+export type UserMemory = z.infer<typeof UserMemorySchema>;

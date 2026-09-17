@@ -26,6 +26,15 @@ npm run dev:embedding
 
 CPU 可以运行，但首次下载和首次加载耗时较长；CUDA 可用时服务自动启用 GPU 与 fp16。
 
+## 知识库诊断与回填
+
+在项目 `.env` 设置一个仅供服务器内部使用的 `INTERNAL_API_KEY` 后，可通过请求头 `x-internal-key` 调用：
+
+- `GET /api/v1/internal/knowledge/status`：只返回知识文档状态数量和模型状态，不返回私人攻略正文。
+- `POST /api/v1/internal/knowledge/backfill`：每次为最多 25 个既有地点生成或重试知识向量，可重复调用直到 `remaining` 为 0。
+
+未配置密钥或密钥不匹配时，这两个接口都会拒绝访问。Embedding 服务不可用只会令对应文档进入失败状态，不影响基础旅行规划和翻译功能。
+
 ## 测试
 
 测试使用假模型，不下载真实权重：

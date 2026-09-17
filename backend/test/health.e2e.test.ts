@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HealthResponseSchema } from "@koreamate/contracts";
 import { HealthModule } from "../src/modules/health/health.module.js";
 
+process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
+
 describe("health endpoint", () => {
   let app: NestFastifyApplication | undefined;
 

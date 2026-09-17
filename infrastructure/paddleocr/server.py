@@ -2,6 +2,7 @@ import argparse
 import base64
 import json
 import os
+import hashlib
 from threading import Lock
 
 # PaddlePaddle's Windows oneDNN backend cannot execute one attribute shape used by
@@ -53,17 +54,35 @@ def ocr(input_data: str) -> str:
         data = result.json["res"]
         texts = data.get("rec_texts", [])
         scores = data.get("rec_scores", [])
-        boxes = data.get("rec_boxes", [])
+        polygons = data.get("rec_polys", [])
         for index, text in enumerate(texts):
             if not text or not text.strip():
                 continue
             lines.append({
+                "lineId": hashlib.sha256(f"{index}:{text.strip()}".encode("utf-8")).hexdigest()[:16],
                 "text": text.strip(),
                 "confidence": round(float(scores[index]) if index < len(scores) else 0, 3),
-                "box": boxes[index].tolist() if index < len(boxes) and hasattr(boxes[index], "tolist") else (boxes[index] if index < len(boxes) else None),
+                "polygon": polygons[index].tolist() if index < len(polygons) and hasattr(polygons[index], "tolist") else (polygons[index] if index < len(polygons) else None),
             })
     confidence = sum(line["confidence"] for line in lines) / len(lines) if lines else 0
-    return json.dumps({"text": "\n".join(line["text"] for line in lines), "confidence": round(confidence, 3), "lines": lines}, ensure_ascii=False)
+    return json.dumps({"text": "\n".join(line["text"] for line in lines), "confidence": round(confidence, 3), "width": int(image.shape[1]), "height": int(image.shape[0]), "lines": lines}, ensure_ascii=False)
+
+
+def warm_up():
+    """Load the model and run one inference before serving traffic.
+
+    PaddleOCR lazy-loads its detection and recognition models and compiles the
+    PaddlePaddle C++ extensions on first use. That cold start can take several
+    minutes, which is long enough to time out the API's first few requests and
+    surface a misleading "OCR service interrupted" error. Warming up here keeps
+    the first real request fast.
+    """
+    print("[koreamate-ocr] warming up model (first run may take a few minutes)…", flush=True)
+    model = engine()
+    blank = np.full((64, 64, 3), 255, dtype=np.uint8)
+    for _ in model.predict(blank):
+        pass
+    print("[koreamate-ocr] warm up complete", flush=True)
 
 
 if __name__ == "__main__":
@@ -71,4 +90,5 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=58010, type=int)
     args = parser.parse_args()
+    warm_up()
     mcp.run(transport="http", host=args.host, port=args.port)

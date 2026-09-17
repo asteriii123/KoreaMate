@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { confirmTrip, createConversation, deleteSavedPlace, getConversation, jobEventsUrl, listSavedPlaces, savePlace, sendImageTranslationMessage, sendImportMessage, sendTextMessage, transcribeSpeech } from "../../lib/api";
+import { ImageTranslationCard } from "./image-translation-card";
 import { audioRecordingSupported, createAudioRecorder, recorderErrorMessage, type AudioRecorderController } from "../../lib/audio-recorder";
 import { speakKorean, speechSynthesisSupported, stopSpeaking } from "../../lib/speech-synthesis";
 import styles from "./conversation-screen.module.css";
@@ -381,18 +382,7 @@ export function ConversationScreen({
           </article>;
           }
           if (item.kind === "imageTranslation") {
-            const result = item.value;
-            return <article className={styles.imageTranslation} key={item.id}>
-              <p className={styles.translationLabel}>{result.kind === "menu" ? "菜单已翻译" : "图片已翻译"}</p>
-              <h2>{result.title}</h2>
-              <p className={styles.imageSummary}>{result.summary}</p>
-              {result.menuItems.length ? <ul className={styles.menuItems}>{result.menuItems.map((dish, index) => <li key={`${dish.originalName}-${index}`}>
-                <div><strong>{dish.name}</strong><span>{dish.originalName}</span>{dish.description ? <p>{dish.description}</p> : null}</div>
-                {dish.price ? <b>{dish.price}</b> : null}
-              </li>)}</ul> : null}
-              {result.sections.length ? <div className={styles.translationSections}>{result.sections.map((section, index) => <div key={`${section.source}-${index}`}><small>{section.source}</small><p>{section.translation}</p></div>)}</div> : null}
-              {result.uncertainText.length ? <details className={styles.uncertain}><summary>有 {result.uncertainText.length} 处文字不太确定</summary><p>{result.uncertainText.join(" · ")}</p></details> : null}
-            </article>;
+            return <ImageTranslationCard result={item.value} key={item.id} />;
           }
           if (item.kind === "import") {
             const preview = item.value;

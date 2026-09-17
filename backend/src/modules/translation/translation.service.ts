@@ -8,13 +8,15 @@ import {
   type TranslationProvider,
 } from "./translation-provider.js";
 import { PaddleOcrProvider, PaddleOcrUnavailableError } from "./paddle-ocr.provider.js";
+import { ImageAssetsService } from "../image-assets/image-assets.service.js";
+import { ImageRendererService, type RenderRegion } from "./image-renderer.service.js";
 
 type TranslationJob = {
   jobId: string;
   conversationId: string;
   sourceMessageId: string;
   text: string;
-  images?: string[];
+  assetIds?: string[];
 };
 
 @Injectable()
@@ -24,11 +26,13 @@ export class TranslationService {
     private readonly prisma: PrismaService,
     @Inject(TRANSLATION_PROVIDER) private readonly provider: TranslationProvider,
     private readonly ocr: PaddleOcrProvider,
+    private readonly imageAssets: ImageAssetsService,
+    private readonly renderer: ImageRendererService,
   ) {}
 
   async process(job: TranslationJob): Promise<void> {
     try {
-      if (job.images?.length) {
+      if (job.assetIds?.length) {
         await this.processImages(job);
         return;
       }
@@ -76,27 +80,89 @@ export class TranslationService {
         message: notConfigured
           ? "翻译服务还没有配置 API Key。"
           : ocrUnavailable
-            ? "图片识别服务刚刚中断，请重新发送这张图片。"
+            ? "图片识别服务暂时不可用，请稍后重试。"
           : "翻译服务暂时不可用，请稍后重试。",
       });
     }
   }
 
   private async processImages(job: TranslationJob): Promise<void> {
-    await this.appendEvent(job.jobId, "translation.image.started", { message: `正在识别 ${job.images?.length ?? 0} 张图片…` });
-    const results = [];
-    for (const image of job.images ?? []) results.push(await this.ocr.recognize(image));
-    const sourceText = results.map((value) => value.text).filter(Boolean).join("\n\n");
-    if (!sourceText.trim()) throw new Error("OCR returned no readable text");
-    const uncertainText = results.flatMap((value) => value.lines.filter((line) => line.confidence < 0.65).map((line) => line.text));
-    await this.appendEvent(job.jobId, "translation.image.ocr.ready", { message: "文字识别完成，正在整理中文…" });
-    const interpreted = await this.provider.interpretImageText(sourceText, uncertainText, job.text);
-    const result: ImageTranslationResult = { ...interpreted, sourceText, uncertainText, provider: { ocr: "paddleocr", translation: this.provider.name } };
+    await this.appendEvent(job.jobId, "translation.image.started", { message: `正在识别 ${job.assetIds?.length ?? 0} 张图片…` });
+    const partials: ImageTranslationResult[] = [];
+    const assets: ImageTranslationResult["assets"] = [];
+    const regions: ImageTranslationResult["regions"] = [];
+    for (const assetId of job.assetIds ?? []) {
+      const outcome = await this.processAsset(assetId, job).catch(() => null);
+      if (outcome) {
+        partials.push(outcome.interpreted);
+        regions.push(...outcome.regions);
+      }
+      assets.push(await this.imageAssets.descriptor(assetId));
+    }
+    if (!partials.length) throw new PaddleOcrUnavailableError();
+    await this.appendEvent(job.jobId, "translation.image.ocr.ready", { message: "文字识别完成，正在生成中文译图…" });
+    const sourceText = partials.map((part) => part.sourceText).filter(Boolean).join("\n\n");
+    const uncertainText = partials.flatMap((part) => part.uncertainText);
+    const first = partials[0]!;
+    const result: ImageTranslationResult = {
+      ...first,
+      sourceText,
+      uncertainText,
+      sections: partials.flatMap((part) => part.sections),
+      menuItems: partials.flatMap((part) => part.menuItems),
+      assets,
+      regions,
+      provider: { ocr: "paddleocr", translation: this.provider.name },
+    };
     await this.prisma.message.create({
       data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { imageTranslation: result } },
     });
     await this.appendEvent(job.jobId, "translation.image.ready", { result });
     await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "IMAGE_TRANSLATION_READY" });
+  }
+
+  private async processAsset(assetId: string, job: TranslationJob): Promise<{ interpreted: ImageTranslationResult; regions: ImageTranslationResult["regions"] }> {
+    const source = await this.imageAssets.source(assetId);
+    const mime = await this.mimeFor(source.buffer);
+    let ocr: Awaited<ReturnType<PaddleOcrProvider["recognize"]>>;
+    try {
+      ocr = await this.ocr.recognize(`data:${mime};base64,${source.buffer.toString("base64")}`);
+    } catch (error) {
+      await this.imageAssets.fail(assetId, error instanceof PaddleOcrUnavailableError ? "OCR_SERVICE_UNAVAILABLE" : "OCR_FAILED");
+      throw error;
+    }
+    if (!ocr.text.trim()) {
+      await this.imageAssets.fail(assetId, "OCR_EMPTY");
+      throw new Error("OCR_EMPTY");
+    }
+    const uncertain = ocr.lines.filter((line) => line.confidence < 0.65).map((line) => line.text);
+    let interpreted: ImageTranslationResult;
+    try {
+      interpreted = await this.provider.interpretImageText(ocr.text, uncertain, job.text);
+    } catch (error) {
+      await this.imageAssets.fail(assetId, "TRANSLATION_FAILED");
+      throw error;
+    }
+    const sx = source.asset.width / Math.max(1, ocr.width);
+    const sy = source.asset.height / Math.max(1, ocr.height);
+    const renderRegions: RenderRegion[] = ocr.lines.map((line, index) => ({
+      ...line,
+      polygon: line.polygon.map(([x, y]) => [x * sx, y * sy]) as RenderRegion["polygon"],
+      translation: interpreted.sections[index]?.translation?.trim() || line.text,
+    }));
+    const publicRegions = renderRegions.map((line) => ({ assetId, lineId: line.lineId, source: line.text, translation: line.translation, confidence: line.confidence, polygon: line.polygon }));
+    try {
+      await this.imageAssets.complete(assetId, await this.renderer.render(source.buffer, renderRegions), publicRegions);
+    } catch {
+      await this.imageAssets.textOnly(assetId, publicRegions, "IMAGE_RENDER_FAILED");
+    }
+    return { interpreted, regions: publicRegions };
+  }
+
+  private async mimeFor(buffer: Buffer): Promise<string> {
+    const format = (await import("sharp")).default(buffer).metadata().then((value) => value.format);
+    const value = await format;
+    return value === "png" ? "image/png" : value === "webp" ? "image/webp" : "image/jpeg";
   }
 
   private async appendEvent(jobId: string, type: string, data: Prisma.InputJsonValue): Promise<void> {

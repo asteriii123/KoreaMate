@@ -10,6 +10,7 @@ import { PrismaService } from "../database/prisma.service.js";
 import { TranslationService } from "../translation/translation.service.js";
 import { TravelService } from "../travel/travel.service.js";
 import type { Identity } from "../auth/identity.service.js";
+import { ImageAssetsService } from "../image-assets/image-assets.service.js";
 
 @Injectable()
 export class ConversationsService {
@@ -17,6 +18,7 @@ export class ConversationsService {
     private readonly prisma: PrismaService,
     private readonly translation: TranslationService,
     private readonly travel: TravelService,
+    private readonly imageAssets: ImageAssetsService,
   ) {}
 
   async create(mode: ConversationMode, identity: Identity = { userId: null, guestId: null }): Promise<Conversation> {
@@ -99,13 +101,24 @@ export class ConversationsService {
         return { message, job };
       });
 
+      let assetIds: string[] = [];
+      if (request.content.type === "IMAGE_TRANSLATION") {
+        try {
+          assetIds = await this.imageAssets.create(result.message.id, request.content.images, identity);
+        } catch {
+          await this.prisma.job.update({ where: { id: result.job.id }, data: { status: "FAILED" } });
+          await this.prisma.jobEvent.create({ data: { jobId: result.job.id, sequence: 2, type: "job.failed", data: { code: "IMAGE_STORAGE_FAILED", message: "图片保存失败，请重新上传。" } } });
+          return { messageId: result.message.id, jobId: result.job.id, status: "ACCEPTED" };
+        }
+      }
+
       if (conversation.mode === "TRANSLATION") {
         void this.translation.process({
           jobId: result.job.id,
           conversationId,
           sourceMessageId: result.message.id,
           text: request.content.text,
-          images: request.content.type === "IMAGE_TRANSLATION" ? request.content.images : [],
+          assetIds,
         });
       } else {
         void this.travel.process({
@@ -130,6 +143,13 @@ export class ConversationsService {
       }
       throw error;
     }
+  }
+
+  async delete(id: string, identity: Identity): Promise<void> {
+    const conversation = await this.prisma.conversation.findFirst({ where: { id, ...this.ownerWhere(identity) }, select: { id: true } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+    await this.imageAssets.deleteForConversation(id);
+    await this.prisma.conversation.delete({ where: { id } });
   }
 
   private ownerWhere(identity: Identity): Prisma.ConversationWhereInput {

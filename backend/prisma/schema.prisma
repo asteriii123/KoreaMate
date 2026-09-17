@@ -59,6 +59,14 @@ enum EmbeddingStatus {
   FAILED
 }
 
+enum ImageAssetStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  TEXT_ONLY
+  FAILED
+}
+
 model Conversation {
   id           String           @id @default(uuid()) @db.Uuid
   mode         ConversationMode
@@ -135,9 +143,30 @@ model Message {
   job            Job?
   translation    Translation?
   sourcedMemories UserMemory[]
+  imageAssets      ImageAsset[]
 
   @@unique([conversationId, idempotencyKey])
   @@index([conversationId, createdAt])
+}
+
+model ImageAsset {
+  id            String           @id @default(uuid()) @db.Uuid
+  messageId     String           @db.Uuid
+  originalKey   String           @unique
+  translatedKey String?          @unique
+  mimeType      String
+  width         Int
+  height        Int
+  status        ImageAssetStatus @default(UPLOADED)
+  regions       Json?
+  errorCode     String?
+  expiresAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  message       Message          @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+  @@index([expiresAt, status])
 }
 
 model UserMemory {

@@ -59,6 +59,8 @@ export class IdentityService {
           if (duplicate) await transaction.knowledgeDocument.delete({ where: { id: document.id } });
           else await transaction.knowledgeDocument.update({ where: { id: document.id }, data: { userId, guestId: null } });
         }
+        const guestAssets = await transaction.imageAsset.findMany({ where: { message: { conversation: { guestId } } }, select: { id: true } });
+        if (guestAssets.length) await transaction.imageAsset.updateMany({ where: { id: { in: guestAssets.map(({ id }) => id) } }, data: { expiresAt: null } });
         await transaction.conversation.updateMany({ where: { guestId }, data: { userId, guestId: null } });
         await transaction.guestIdentity.update({ where: { id: guestId }, data: { mergedAt: new Date() } });
       });

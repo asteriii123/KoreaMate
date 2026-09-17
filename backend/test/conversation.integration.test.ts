@@ -45,7 +45,7 @@ describe("conversation persistence", () => {
         };
       },
       async interpretImageText(text, uncertainText) {
-        return { kind: "text", title: "图片翻译", summary: "已识别", sourceText: text, sections: [{ source: text, translation: "图片中文翻译" }], menuItems: [], uncertainText, provider: { ocr: "paddleocr", translation: "integration-test" } };
+        return { kind: "text", title: "图片翻译", summary: "已识别", sourceText: text, sections: [{ source: text, translation: "图片中文翻译" }], menuItems: [], uncertainText, provider: { ocr: "paddleocr", translation: "integration-test" }, assets: [], regions: [] };
       },
     };
     const requirements = { destination: "首尔", departureCity: "上海", startDate: "2026-10-01", days: 2, travelers: 3, budget: 3000, currency: "CNY", interests: ["美食"], pace: "balanced" as const, constraints: [] };

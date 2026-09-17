@@ -15,6 +15,11 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3100/api/v1";
 
+export function resolveApiUrl(path: string): string {
+  if (/^https?:\/\//u.test(path)) return path;
+  return `${API_URL.replace(/\/api\/v1\/?$/u, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 async function requestJson<T>(path: string, init: RequestInit, parse: (value: unknown) => T): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,

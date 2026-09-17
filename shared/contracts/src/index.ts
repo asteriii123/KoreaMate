@@ -107,6 +107,22 @@ export const ImageTranslationResultSchema = z.object({
   })).max(40),
   uncertainText: z.array(z.string().min(1)).max(30),
   provider: z.object({ ocr: z.string().min(1), translation: z.string().min(1) }),
+  assets: z.array(z.object({
+    id: z.uuid(),
+    status: z.enum(["uploaded", "processing", "ready", "text_only", "failed"]),
+    originalUrl: z.string().min(1),
+    translatedUrl: z.string().min(1).nullable(),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  })).max(4).default([]),
+  regions: z.array(z.object({
+    assetId: z.uuid(),
+    lineId: z.string().min(1).max(80),
+    source: z.string().min(1),
+    translation: z.string().min(1),
+    confidence: z.number().min(0).max(1),
+    polygon: z.array(z.tuple([z.number().nonnegative(), z.number().nonnegative()])).length(4),
+  })).max(160).default([]),
 });
 
 export const CitationSchema = z.object({

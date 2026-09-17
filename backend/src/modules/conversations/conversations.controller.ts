@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Req, Res } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Post, Req, Res } from "@nestjs/common";
 import {
   CreateConversationRequestSchema,
   SendMessageRequestSchema,
@@ -28,6 +28,12 @@ export class ConversationsController {
   @Get(":id")
   async get(@Param("id") id: string, @Req() raw: FastifyRequest): Promise<unknown> {
     return this.conversations.get(id, await this.identity.resolve(raw));
+  }
+
+  @Delete(":id")
+  async delete(@Param("id") id: string, @Req() raw: FastifyRequest): Promise<{ deleted: true }> {
+    await this.conversations.delete(id, await this.identity.resolve(raw));
+    return { deleted: true };
   }
 
   @Post(":id/messages")

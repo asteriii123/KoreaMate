@@ -11,6 +11,7 @@ import { SpeechModule } from "./modules/speech/speech.module.js";
 import { SavedPlacesModule } from "./modules/saved-places/saved-places.module.js";
 import { MemoryModule } from "./modules/memory/memory.module.js";
 import { KnowledgeModule } from "./modules/knowledge/knowledge.module.js";
+import { ImageAssetsModule } from "./modules/image-assets/image-assets.module.js";
 
-@Module({ imports: [DatabaseModule, AuthModule, KnowledgeModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule, MemoryModule] })
+@Module({ imports: [DatabaseModule, AuthModule, ImageAssetsModule, KnowledgeModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule, MemoryModule] })
 export class AppModule {}

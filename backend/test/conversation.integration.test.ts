@@ -5,19 +5,19 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AcceptedMessageSchema, ConversationSchema } from "@koreamate/contracts";
 import { AppModule } from "../src/app.module.js";
-import { PrismaService } from "../src/modules/database/prisma.service.js";
+import { PrismaService } from "../src/database/prisma.service.js";
 import {
   TRANSLATION_PROVIDER,
   type TranslationProvider,
-} from "../src/modules/translation/translation-provider.js";
-import { TRAVEL_PROVIDER, type TravelProvider } from "../src/modules/travel/travel-provider.js";
-import { KakaoPlaceProvider } from "../src/modules/places/kakao-place.provider.js";
-import { OpenMeteoWeatherProvider } from "../src/modules/travel/open-meteo-weather.provider.js";
-import { FrankfurterExchangeProvider } from "../src/modules/travel/frankfurter-exchange.provider.js";
-import { GuideImportService } from "../src/modules/travel/guide-import.service.js";
-import { HotelMcpProvider } from "../src/modules/travel/hotel-mcp.provider.js";
-import { FlightMcpProvider } from "../src/modules/travel/flight-mcp.provider.js";
-import { OpenAiCompatibleMemoryExtractor } from "../src/modules/memory/openai-compatible-memory.extractor.js";
+} from "../src/translate/translate-provider.js";
+import { TRAVEL_PROVIDER, type TravelProvider } from "../src/plan/plan-provider.js";
+import { KakaoPlaceProvider } from "../src/place/kakao.js";
+import { OpenMeteoWeatherProvider } from "../src/plan/weather.js";
+import { FrankfurterExchangeProvider } from "../src/plan/exchange.js";
+import { GuideImportService } from "../src/plan/import-guide.js";
+import { HotelMcpProvider } from "../src/plan/hotels.js";
+import { FlightMcpProvider } from "../src/plan/flights.js";
+import { OpenAiCompatibleMemoryExtractor } from "../src/memory/memory-llm.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -125,7 +125,7 @@ describe("conversation persistence", () => {
     const idempotencyKey = randomUUID();
     const request = {
       method: "POST" as const,
-      url: `/api/v1/conversations/${conversation.id}/messages`,
+      url: `/api/v1/chat/${conversation.id}/messages`,
       headers: { "idempotency-key": idempotencyKey, cookie },
       payload: { content: { type: "TEXT", text: "请问可以刷卡吗？" } },
     };
@@ -143,7 +143,7 @@ describe("conversation persistence", () => {
     const { conversation, cookie } = await createConversation("TRAVEL");
     const accepted = AcceptedMessageSchema.parse((await app.inject({
       method: "POST",
-      url: `/api/v1/conversations/${conversation.id}/messages`,
+      url: `/api/v1/chat/${conversation.id}/messages`,
       headers: { "idempotency-key": randomUUID(), cookie },
       payload: { content: { type: "TEXT", text: "十月去首尔五天" } },
     })).json());
@@ -161,7 +161,7 @@ describe("conversation persistence", () => {
     const { conversation, cookie } = await createConversation("TRANSLATION");
     const accepted = AcceptedMessageSchema.parse((await app.inject({
       method: "POST",
-      url: `/api/v1/conversations/${conversation.id}/messages`,
+      url: `/api/v1/chat/${conversation.id}/messages`,
       headers: { "idempotency-key": randomUUID(), cookie },
       payload: { content: { type: "TEXT", text: "你好" } },
     })).json());
@@ -185,7 +185,7 @@ describe("conversation persistence", () => {
     expect(statuses.statusCode).toBe(200);
     expect(statuses.json()).toContainEqual({ id: "kakao", configured: true });
 
-    const response = await app.inject({ method: "GET", url: "/api/v1/places/search?query=%E6%99%AF%E7%A6%8F%E5%AE%AB&provider=kakao" });
+    const response = await app.inject({ method: "GET", url: "/api/v1/place/search?query=%E6%99%AF%E7%A6%8F%E5%AE%AB&provider=kakao" });
     expect(response.statusCode).toBe(200);
     expect(response.json()[0]).toMatchObject({ name: "경복궁", provider: "kakao" });
     expect(await prisma.placeSource.count({ where: { provider: "kakao", externalId: "kakao-1" } })).toBe(1);
@@ -194,7 +194,7 @@ describe("conversation persistence", () => {
   it("asks once, creates a validated plan, and preserves versions on modification", async () => {
     const { conversation, cookie } = await createConversation("TRAVEL");
     const send = async (text: string): Promise<string> => {
-      const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID(), cookie }, payload: { content: { type: "TEXT", text } } })).json());
+      const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/chat/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID(), cookie }, payload: { content: { type: "TEXT", text } } })).json());
       return (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
     };
 
@@ -251,7 +251,7 @@ describe("conversation persistence", () => {
 
   it("previews an xhslink.cn guide without creating a trip version", async () => {
     const { conversation, cookie } = await createConversation("TRAVEL");
-    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/conversations/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID(), cookie }, payload: { content: { type: "TEXT", text: "https://xhslink.cn/o/example" } } })).json());
+    const accepted = AcceptedMessageSchema.parse((await app.inject({ method: "POST", url: `/api/v1/chat/${conversation.id}/messages`, headers: { "idempotency-key": randomUUID(), cookie }, payload: { content: { type: "TEXT", text: "https://xhslink.cn/o/example" } } })).json());
     const events = await (await fetch(`${baseUrl}/api/v1/jobs/${accepted.jobId}/events`)).text();
     expect(events).toContain("event: travel.import.ready");
     expect(events).not.toContain("event: travel.plan.ready");

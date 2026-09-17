@@ -3,7 +3,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { HealthResponseSchema } from "@koreamate/contracts";
-import { HealthModule } from "../src/modules/health/health.module.js";
+import { HealthModule } from "../src/health/health.module.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 

@@ -4,7 +4,7 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SavedPlaceListSchema, SavedPlaceSchema } from "@koreamate/contracts";
 import { AppModule } from "../src/app.module.js";
-import { PrismaService } from "../src/modules/database/prisma.service.js";
+import { PrismaService } from "../src/database/prisma.service.js";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -47,9 +47,9 @@ describe("saved places", () => {
     const otherList = SavedPlaceListSchema.parse((await app.inject({ method: "GET", url: "/api/v1/saved-places" })).json());
     expect(otherList.items).toHaveLength(0);
 
-    const forbiddenDelete = await app.inject({ method: "DELETE", url: `/api/v1/saved-places/${saved.id}` });
+    const forbiddenDelete = await app.inject({ method: "DELETE", url: `/api/v1/saved/${saved.id}` });
     expect(forbiddenDelete.statusCode).toBe(404);
-    const removed = await app.inject({ method: "DELETE", url: `/api/v1/saved-places/${saved.id}`, headers: { cookie } });
+    const removed = await app.inject({ method: "DELETE", url: `/api/v1/saved/${saved.id}`, headers: { cookie } });
     expect(removed.statusCode).toBe(200);
     expect(await prisma.place.findUnique({ where: { id: placeId } })).not.toBeNull();
   });

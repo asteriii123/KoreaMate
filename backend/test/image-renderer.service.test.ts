@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { ImageRendererService } from "../src/modules/translation/image-renderer.service.js";
+import { ImageRendererService } from "../src/translate/render.js";
 
 describe("ImageRendererService", () => {
   it("keeps the source dimensions and creates a WebP overlay", async () => {

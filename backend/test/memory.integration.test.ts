@@ -4,9 +4,9 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { UserMemoryListSchema } from "@koreamate/contracts";
 import { AppModule } from "../src/app.module.js";
-import { PrismaService } from "../src/modules/database/prisma.service.js";
-import { MemoryService } from "../src/modules/memory/memory.service.js";
-import { IdentityService } from "../src/modules/auth/identity.service.js";
+import { PrismaService } from "../src/database/prisma.service.js";
+import { MemoryService } from "../src/memory/memory.service.js";
+import { IdentityService } from "../src/auth/identity.service.js";
 import type { FastifyReply } from "fastify";
 import { KnowledgeKind, KnowledgeStatus, KnowledgeVisibility } from "@prisma/client";
 

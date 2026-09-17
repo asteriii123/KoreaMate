@@ -64,4 +64,10 @@ describe("KnowledgeSearchService", () => {
     embeddings.embed.mockRejectedValueOnce(new Error("offline"));
     await expect(service.search("景福宫", { userId: null, guestId: "66666666-6666-4666-8666-666666666666" })).resolves.toEqual({ officialFacts: [], personalExperiences: [] });
   });
+
+  it("normalizes legacy Kakao HTTP links without dropping the result", async () => {
+    const { service } = setup([[{ ...official, sourceUrl: "http://place.map.kakao.com/1" }], []]);
+    const result = await service.search("景福宫", { userId: "33333333-3333-4333-8333-333333333333", guestId: null });
+    expect(result.officialFacts[0]?.sourceUrl).toBe("https://place.map.kakao.com/1");
+  });
 });

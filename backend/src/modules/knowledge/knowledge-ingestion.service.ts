@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { EmbeddingStatus, KnowledgeKind, KnowledgeStatus, KnowledgeVisibility, Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { EmbeddingClient, EmbeddingClientError } from "./embedding.client.js";
-import { knowledgeHash, publicPlaceText } from "./knowledge-text.js";
+import { knowledgeHash, publicPlaceText, secureKnowledgeSourceUrl } from "./knowledge-text.js";
 import type { Identity } from "../auth/identity.service.js";
 
 export type PrivateGuideChunk = { title: string; content: string; metadata: Prisma.InputJsonObject };
@@ -81,11 +81,12 @@ export class KnowledgeIngestionService {
     if (!source) return null;
     const content = publicPlaceText({ ...source.place, provider: source.provider });
     const contentHash = knowledgeHash(content);
+    const sourceUrl = secureKnowledgeSourceUrl(source.sourceUrl);
     const existing = await this.prisma.knowledgeDocument.findUnique({ where: { placeSourceId } });
     if (existing?.contentHash === contentHash && existing.status === KnowledgeStatus.READY) {
       await this.prisma.knowledgeDocument.update({
         where: { id: existing.id },
-        data: { title: source.place.nameZh ?? source.place.name, sourceUrl: source.sourceUrl, sourceFetchedAt: source.fetchedAt, sourceExpiresAt: source.expiresAt },
+        data: { title: source.place.nameZh ?? source.place.name, sourceUrl, sourceFetchedAt: source.fetchedAt, sourceExpiresAt: source.expiresAt },
       });
       return existing.id;
     }
@@ -98,7 +99,7 @@ export class KnowledgeIngestionService {
         placeSourceId,
         provider: source.provider,
         externalId: source.externalId,
-        sourceUrl: source.sourceUrl,
+        sourceUrl,
         title: source.place.nameZh ?? source.place.name,
         rawContent: content,
         sourceFetchedAt: source.fetchedAt,
@@ -109,7 +110,7 @@ export class KnowledgeIngestionService {
       update: {
         provider: source.provider,
         externalId: source.externalId,
-        sourceUrl: source.sourceUrl,
+        sourceUrl,
         title: source.place.nameZh ?? source.place.name,
         rawContent: content,
         sourceFetchedAt: source.fetchedAt,

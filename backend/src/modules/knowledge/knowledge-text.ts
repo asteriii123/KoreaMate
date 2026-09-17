@@ -21,3 +21,10 @@ export function publicPlaceText(place: PublicPlaceKnowledge): string {
 export function knowledgeHash(content: string): string {
   return createHash("sha256").update(content.normalize("NFKC")).digest("hex");
 }
+
+export function secureKnowledgeSourceUrl(value: string | null): string | null {
+  if (!value) return null;
+  const url = new URL(value);
+  if (url.protocol === "http:" && url.hostname === "place.map.kakao.com") url.protocol = "https:";
+  return url.protocol === "https:" ? url.toString() : null;
+}

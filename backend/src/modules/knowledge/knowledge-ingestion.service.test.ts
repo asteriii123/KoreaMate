@@ -104,4 +104,12 @@ describe("KnowledgeIngestionService", () => {
     const service = new KnowledgeIngestionService(prismaMock() as never, { embed: vi.fn() } as unknown as EmbeddingClient);
     await expect(service.syncPrivateGuide({ tripResourceId: source.id, identity: { userId: null, guestId: null }, externalId: "x", sourceUrl: null, title: "x", chunks: [{ title: "x", content: "x", metadata: {} }] })).rejects.toThrow("PRIVATE_KNOWLEDGE_OWNER_INVALID");
   });
+
+  it("stores Kakao place links as HTTPS", async () => {
+    const prisma = prismaMock();
+    prisma.placeSource.findUnique.mockResolvedValue({ ...source, sourceUrl: "http://place.map.kakao.com/123" });
+    const vector = [1, ...Array(1023).fill(0)] as number[];
+    await new KnowledgeIngestionService(prisma as never, { embed: vi.fn().mockResolvedValue([vector]) } as unknown as EmbeddingClient).syncPublicPlace(source.id);
+    expect(prisma.knowledgeDocument.upsert.mock.calls[0]?.[0].create.sourceUrl).toBe("https://place.map.kakao.com/123");
+  });
 });

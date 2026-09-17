@@ -4,6 +4,7 @@ import { TravelKnowledgeContextSchema, type KnowledgeReference, type TravelKnowl
 import type { Identity } from "../auth/identity.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { EmbeddingClient } from "./embedding.client.js";
+import { secureKnowledgeSourceUrl } from "./knowledge-text.js";
 
 type SearchRow = {
   chunkId: string;
@@ -102,7 +103,7 @@ export class KnowledgeSearchService {
         title: row.title,
         content: row.content.slice(0, 1_200),
         provider: row.provider,
-        sourceUrl: row.sourceUrl,
+        sourceUrl: secureKnowledgeSourceUrl(row.sourceUrl),
         fetchedAt: row.fetchedAt?.toISOString() ?? null,
         expiresAt: row.expiresAt?.toISOString() ?? null,
         stale,

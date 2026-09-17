@@ -5,10 +5,11 @@ import { PrismaService } from "../database/prisma.service.js";
 import type { ExternalPlace, PlaceProvider } from "./place-provider.js";
 import { PlaceProviderNotConfiguredError } from "./place-provider.js";
 import { ProviderRegistryService } from "./provider-registry.service.js";
+import { KnowledgeIngestionService } from "../knowledge/knowledge-ingestion.service.js";
 
 @Injectable()
 export class PlacesService {
-  constructor(private readonly prisma: PrismaService, private readonly registry: ProviderRegistryService) {}
+  constructor(private readonly prisma: PrismaService, private readonly registry: ProviderRegistryService, private readonly knowledge: KnowledgeIngestionService) {}
 
   async search(query: string, requestedProvider?: string): Promise<PlaceResult[]> {
     const providers = this.registry.placeProviders().filter((provider) => !requestedProvider || provider.id === requestedProvider);
@@ -47,6 +48,7 @@ export class PlacesService {
       create: { placeId: place.id, provider: result.provider, externalId: result.externalId, sourceUrl: result.sourceUrl, raw, expiresAt },
       update: { placeId: place.id, sourceUrl: result.sourceUrl, raw, fetchedAt: new Date(), expiresAt },
     });
+    this.knowledge.queuePublicPlace(source.id);
     return { id: place.id, name: place.name, address: place.address, latitude: Number(place.latitude), longitude: Number(place.longitude), category: place.category, provider: result.provider, sourceUrl: source.sourceUrl, fetchedAt: source.fetchedAt.toISOString(), expiresAt: source.expiresAt.toISOString() };
   }
 

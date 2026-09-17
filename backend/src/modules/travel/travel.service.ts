@@ -21,6 +21,7 @@ import type { Identity } from "../auth/identity.service.js";
 import { MemoryService } from "../memory/memory.service.js";
 import { OpenAiCompatibleMemoryExtractor } from "../memory/openai-compatible-memory.extractor.js";
 import { CitationFactory } from "../citations/citation.factory.js";
+import { KnowledgeSearchService } from "../knowledge/knowledge-search.service.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -41,6 +42,7 @@ export class TravelService {
     private readonly memories: MemoryService,
     private readonly memoryExtractor: OpenAiCompatibleMemoryExtractor,
     private readonly citations: CitationFactory,
+    private readonly knowledgeSearch: KnowledgeSearchService,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -103,6 +105,7 @@ export class TravelService {
       }
       const selectedGuidePlaces = this.selectedGuidePlaces(job.text);
       if (selectedGuidePlaces) await this.guideImport.confirmSelection(trip.id, selectedGuidePlaces).catch(() => undefined);
+      const knowledge = await this.knowledgeSearch.search(job.text, identity);
       const result = await this.provider.plan({
         message: job.text,
         requirements: contextualRequirements,
@@ -110,6 +113,7 @@ export class TravelService {
         pendingField,
         today,
         memory,
+        knowledge,
       });
 
       const resolvedRequirements = pendingField && contextualRequirements?.[pendingField] != null

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TravelKnowledgeContext } from "@koreamate/contracts";
 
 export const TRAVEL_PROVIDER = Symbol("TRAVEL_PROVIDER");
 
@@ -60,6 +61,7 @@ export interface TravelProvider {
     pendingField: PendingField | null;
     today: string;
     memory: TravelMemoryContext;
+    knowledge?: TravelKnowledgeContext;
   }): Promise<TravelProviderResult>;
 }
 

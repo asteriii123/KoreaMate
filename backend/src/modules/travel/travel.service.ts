@@ -364,12 +364,13 @@ export class TravelService {
       return true;
     }
     const candidates = await this.prisma.itineraryItem.findMany({ where: { itineraryDay: { tripVersionId: versionId }, placeId: { not: null } }, orderBy: [{ itineraryDay: { dayNumber: "asc" } }, { startTime: "asc" }], include: { place: true } });
-    const unique = [...new Map(candidates.filter((item) => item.place).map((item) => [item.placeId!, item])).values()];
     const query = text.replace(/(请|帮我|把|将|一下|这个地方|这个地点|刚才那个|取消收藏|不要收藏|移出收藏|收藏|记住|保存|起来|吧|。|！|!)/gu, "").trim();
-    const exactMatches = query ? unique.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => name === query)) : [];
-    const matches = query
-      ? exactMatches.length > 0 ? exactMatches : unique.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => Boolean(name) && (name!.includes(query) || query.includes(name!))))
-      : unique.slice(-1);
+    const exactMatches = query ? candidates.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => name === query)) : [];
+    const filtered = query
+      ? exactMatches.length > 0 ? exactMatches : candidates.filter((item) => [item.title, item.place?.name, item.place?.nameZh].some((name) => Boolean(name) && (name!.includes(query) || query.includes(name!))))
+      : candidates;
+    const uniqueMatches = [...new Map(filtered.filter((item) => item.place).map((item) => [item.placeId!, item])).values()];
+    const matches = query ? uniqueMatches : uniqueMatches.slice(-1);
     if (matches.length !== 1) {
       const names = matches.length > 1 ? matches.slice(0, 3).map((item) => item.place?.nameZh ?? item.title).join("、") : "";
       const question = names ? `你想操作哪个地点：${names}？` : "我没找到这个已核验地点，请说出行程卡片里的地点名称。";

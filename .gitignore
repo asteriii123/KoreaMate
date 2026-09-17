@@ -3,6 +3,8 @@ node_modules/
 .venv-ocr/
 .venv-whisper/
 .venv-embedding/
+.data-image-assets/
+.logs/
 .modelscope-cache/
 __pycache__/
 *.pyc

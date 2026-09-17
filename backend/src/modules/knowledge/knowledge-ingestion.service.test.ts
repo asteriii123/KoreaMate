@@ -17,8 +17,8 @@ const source = {
 type MockPrisma = {
   placeSource: { findUnique: ReturnType<typeof vi.fn> };
   knowledgeDocument: { findUnique: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
-  knowledgeChunk: { upsert: ReturnType<typeof vi.fn> };
-  knowledgeEmbedding: { upsert: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+  knowledgeChunk: { upsert: ReturnType<typeof vi.fn>; deleteMany: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
+  knowledgeEmbedding: { upsert: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
   $executeRaw: ReturnType<typeof vi.fn>;
   $transaction: ReturnType<typeof vi.fn>;
 };
@@ -31,10 +31,12 @@ function prismaMock(existing: unknown = null): MockPrisma {
       upsert: vi.fn().mockResolvedValue({ id: "33333333-3333-4333-8333-333333333333" }),
       update: vi.fn().mockResolvedValue({}),
     },
-    knowledgeChunk: { upsert: vi.fn().mockResolvedValue({ id: "44444444-4444-4444-8444-444444444444" }) },
+    knowledgeChunk: { upsert: vi.fn().mockResolvedValue({ id: "44444444-4444-4444-8444-444444444444" }), deleteMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({ id: "44444444-4444-4444-8444-444444444444", content: "地点：景福宫" }) },
     knowledgeEmbedding: {
       upsert: vi.fn().mockResolvedValue({ id: "55555555-5555-4555-8555-555555555555" }),
+      create: vi.fn().mockResolvedValue({ id: "55555555-5555-4555-8555-555555555555" }),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn().mockImplementation(async (operations: unknown[]) => Promise.all(operations)),
@@ -78,5 +80,28 @@ describe("KnowledgeIngestionService", () => {
     await expect(new KnowledgeIngestionService(prisma as never, embeddings as unknown as EmbeddingClient).syncPublicPlace(source.id)).rejects.toThrow("offline");
     expect(prisma.knowledgeEmbedding.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "FAILED", lastErrorCode: "EMBEDDING_FAILED" }) }));
     expect(prisma.knowledgeDocument.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "FAILED" } }));
+  });
+
+  it("stores selected guide experience for exactly one private owner", async () => {
+    const prisma = prismaMock();
+    const vector = [1, ...Array(1023).fill(0)] as number[];
+    const embeddings = { embed: vi.fn().mockResolvedValue([vector]) };
+    await new KnowledgeIngestionService(prisma as never, embeddings as unknown as EmbeddingClient).syncPrivateGuide({
+      tripResourceId: "66666666-6666-4666-8666-666666666666",
+      identity: { userId: null, guestId: "77777777-7777-4777-8777-777777777777" },
+      externalId: "preview-1",
+      sourceUrl: "https://xhslink.cn/example",
+      title: "私人攻略：景福宫",
+      chunks: [{ title: "景福宫", content: "地点：景福宫\n攻略经验：上午人少", metadata: { name: "景福宫" } }],
+    });
+    const input = prisma.knowledgeDocument.upsert.mock.calls[0]?.[0];
+    expect(input.create).toMatchObject({ kind: "PERSONAL_EXPERIENCE", visibility: "PRIVATE", userId: null, guestId: "77777777-7777-4777-8777-777777777777" });
+    expect(prisma.knowledgeChunk.create).toHaveBeenCalledOnce();
+    expect(embeddings.embed).toHaveBeenCalledWith(["地点：景福宫"]);
+  });
+
+  it("rejects private knowledge without exactly one owner", async () => {
+    const service = new KnowledgeIngestionService(prismaMock() as never, { embed: vi.fn() } as unknown as EmbeddingClient);
+    await expect(service.syncPrivateGuide({ tripResourceId: source.id, identity: { userId: null, guestId: null }, externalId: "x", sourceUrl: null, title: "x", chunks: [{ title: "x", content: "x", metadata: {} }] })).rejects.toThrow("PRIVATE_KNOWLEDGE_OWNER_INVALID");
   });
 });

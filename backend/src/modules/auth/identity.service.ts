@@ -53,6 +53,12 @@ export class IdentityService {
         }
         await transaction.savedPlace.deleteMany({ where: { guestId } });
         await transaction.userMemory.deleteMany({ where: { guestId } });
+        const guestKnowledge = await transaction.knowledgeDocument.findMany({ where: { guestId } });
+        for (const document of guestKnowledge) {
+          const duplicate = await transaction.knowledgeDocument.findFirst({ where: { userId, contentHash: document.contentHash } });
+          if (duplicate) await transaction.knowledgeDocument.delete({ where: { id: document.id } });
+          else await transaction.knowledgeDocument.update({ where: { id: document.id }, data: { userId, guestId: null } });
+        }
         await transaction.conversation.updateMany({ where: { guestId }, data: { userId, guestId: null } });
         await transaction.guestIdentity.update({ where: { id: guestId }, data: { mergedAt: new Date() } });
       });

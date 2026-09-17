@@ -15,9 +15,10 @@ import { FlightMcpProvider } from "./flight-mcp.provider.js";
 import { SavedPlacesModule } from "../saved-places/saved-places.module.js";
 import { MemoryModule } from "../memory/memory.module.js";
 import { CitationsModule } from "../citations/citations.module.js";
+import { KnowledgeModule } from "../knowledge/knowledge.module.js";
 
 @Module({
-  imports: [DatabaseModule, PlacesModule, SavedPlacesModule, MemoryModule, CitationsModule],
+  imports: [DatabaseModule, PlacesModule, SavedPlacesModule, MemoryModule, CitationsModule, KnowledgeModule],
   controllers: [TravelController],
   providers: [
     TravelService,

@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { PrismaService } from "../database/prisma.service.js";
 import { PlacesService } from "../places/places.service.js";
+import { KnowledgeIngestionService, type PrivateGuideChunk } from "../knowledge/knowledge-ingestion.service.js";
 
 const ExtractedSchema = z.object({ items: z.array(z.object({
   name: z.string().min(1),
@@ -14,10 +15,12 @@ const ExtractedSchema = z.object({ items: z.array(z.object({
 })).max(30) });
 
 type ChatResponse = { choices?: Array<{ message?: { content?: string } }> };
+const StoredGuideSchema = z.object({ preview: GuideImportPreviewSchema, knowledgeItems: ExtractedSchema.shape.items });
+const GuideQuerySchema = z.object({ urls: z.array(z.string().url()).default([]), imageCount: z.number().int().nonnegative() });
 
 @Injectable()
 export class GuideImportService {
-  constructor(private readonly prisma: PrismaService, private readonly places: PlacesService) {}
+  constructor(private readonly prisma: PrismaService, private readonly places: PlacesService, private readonly knowledge: KnowledgeIngestionService) {}
 
   async parse(input: { tripId: string; text: string; images: string[] }): Promise<GuideImportPreview> {
     const urls = [...input.text.matchAll(/https?:\/\/[^\s]+/giu)].map((match) => match[0]).filter((url) => this.isAllowedUrl(url)).slice(0, 5);
@@ -30,6 +33,7 @@ export class GuideImportService {
       : await this.extract([userNotes, pageText].filter(Boolean).join("\n\n"), input.images);
     const seen = new Set<string>();
     const items: GuideImportPreview["items"] = [];
+    const knowledgeItems: z.infer<typeof ExtractedSchema>["items"] = [];
     for (const item of extracted.items) {
       if (this.isBroadDestination(item.query)) continue;
       const key = item.name.normalize("NFKC").toLocaleLowerCase("ko-KR");
@@ -37,13 +41,39 @@ export class GuideImportService {
       seen.add(key);
       const place = await this.places.search(item.query, "kakao").then((results) => results[0] ?? null).catch(() => null);
       items.push({ name: item.name, kind: item.kind, note: item.note, verified: place !== null, place });
+      knowledgeItems.push(item);
     }
     const id = crypto.randomUUID();
     const preview = GuideImportPreviewSchema.parse({ id, sourceCount: urls.length + input.images.length, failedSourceCount, needsFallback: items.length === 0 && urls.length > 0 && input.images.length === 0, items });
     await this.prisma.tripResource.create({
-      data: { tripId: input.tripId, kind: "guide-import", provider: "llm+kakao", query: { urls, imageCount: input.images.length }, data: JSON.parse(JSON.stringify(preview)) as Prisma.InputJsonValue, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000) },
+      data: { tripId: input.tripId, kind: "guide-import", provider: "llm+kakao", query: { urls, imageCount: input.images.length }, data: JSON.parse(JSON.stringify({ preview, knowledgeItems })) as Prisma.InputJsonValue, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000) },
     });
     return preview;
+  }
+
+  async confirmSelection(tripId: string, selectedNames: string[]): Promise<void> {
+    const resource = await this.prisma.tripResource.findFirst({ where: { tripId, kind: "guide-import" }, orderBy: { fetchedAt: "desc" } });
+    if (!resource) return;
+    const stored = StoredGuideSchema.safeParse(resource.data);
+    if (!stored.success || selectedNames.length === 0) return;
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { conversation: { select: { userId: true, guestId: true } } } });
+    if (!trip || (!trip.conversation.userId && !trip.conversation.guestId)) return;
+    const selected = new Set(selectedNames.map((name) => this.normalize(name)));
+    const chunks: PrivateGuideChunk[] = stored.data.knowledgeItems.flatMap((item) => {
+      if (!selected.has(this.normalize(item.name)) && !selected.has(this.normalize(item.query))) return [];
+      return [{ title: item.name, content: [`地点：${item.name}`, item.note ? `攻略经验：${item.note}` : null, `来源依据：${item.evidence}`].filter(Boolean).join("\n"), metadata: { name: item.name, query: item.query, kind: item.kind } }];
+    });
+    if (chunks.length === 0) return;
+    const query = GuideQuerySchema.safeParse(resource.query);
+    const sourceUrl = query.success ? query.data.urls[0] ?? null : null;
+    this.knowledge.queuePrivateGuide({
+      tripResourceId: resource.id,
+      identity: { userId: trip.conversation.userId, guestId: trip.conversation.guestId },
+      externalId: stored.data.preview.id,
+      sourceUrl,
+      title: `私人攻略：${chunks.map((chunk) => chunk.title).join("、")}`,
+      chunks,
+    });
   }
 
   private async extract(text: string, images: string[]): Promise<z.infer<typeof ExtractedSchema>> {
@@ -75,6 +105,8 @@ export class GuideImportService {
     const normalized = query.replace(/\s+/gu, "");
     return /^(대한민국|한국|서울|서울시|부산|부산시|제주|제주도|인천|대구|대전|광주|울산|경기도|강원도)$/u.test(normalized);
   }
+
+  private normalize(value: string): string { return value.normalize("NFKC").replace(/\s+/gu, "").toLocaleLowerCase("ko-KR"); }
 
   private async readPage(url: string): Promise<string> {
     const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 KoreaMate/3.0" }, redirect: "follow", signal: AbortSignal.timeout(10_000) });

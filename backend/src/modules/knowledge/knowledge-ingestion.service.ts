@@ -3,6 +3,9 @@ import { EmbeddingStatus, KnowledgeKind, KnowledgeStatus, KnowledgeVisibility, P
 import { PrismaService } from "../database/prisma.service.js";
 import { EmbeddingClient, EmbeddingClientError } from "./embedding.client.js";
 import { knowledgeHash, publicPlaceText } from "./knowledge-text.js";
+import type { Identity } from "../auth/identity.service.js";
+
+export type PrivateGuideChunk = { title: string; content: string; metadata: Prisma.InputJsonObject };
 
 @Injectable()
 export class KnowledgeIngestionService {
@@ -13,6 +16,64 @@ export class KnowledgeIngestionService {
 
   queuePublicPlace(placeSourceId: string): void {
     void this.syncPublicPlace(placeSourceId).catch(() => undefined);
+  }
+
+  queuePrivateGuide(input: { tripResourceId: string; identity: Identity; externalId: string; sourceUrl: string | null; title: string; chunks: PrivateGuideChunk[] }): void {
+    void this.syncPrivateGuide(input).catch(() => undefined);
+  }
+
+  async syncPrivateGuide(input: { tripResourceId: string; identity: Identity; externalId: string; sourceUrl: string | null; title: string; chunks: PrivateGuideChunk[] }): Promise<string | null> {
+    if (Boolean(input.identity.userId) === Boolean(input.identity.guestId)) throw new Error("PRIVATE_KNOWLEDGE_OWNER_INVALID");
+    const chunks = input.chunks.filter((chunk) => chunk.content.trim()).slice(0, 30);
+    if (chunks.length === 0) return null;
+    const rawContent = chunks.map((chunk) => chunk.content.trim()).join("\n\n");
+    const contentHash = knowledgeHash(rawContent);
+    const existing = await this.prisma.knowledgeDocument.findUnique({ where: { tripResourceId: input.tripResourceId } });
+    if (existing?.contentHash === contentHash && existing.status === KnowledgeStatus.READY) return existing.id;
+    const document = await this.prisma.knowledgeDocument.upsert({
+      where: { tripResourceId: input.tripResourceId },
+      create: {
+        kind: KnowledgeKind.PERSONAL_EXPERIENCE,
+        visibility: KnowledgeVisibility.PRIVATE,
+        userId: input.identity.userId,
+        guestId: input.identity.guestId,
+        tripResourceId: input.tripResourceId,
+        provider: "user-guide",
+        externalId: input.externalId,
+        sourceUrl: input.sourceUrl,
+        title: input.title,
+        rawContent,
+        contentHash,
+        status: KnowledgeStatus.PENDING,
+      },
+      update: { sourceUrl: input.sourceUrl, title: input.title, rawContent, contentHash, status: KnowledgeStatus.PENDING },
+    });
+    await this.prisma.knowledgeChunk.deleteMany({ where: { documentId: document.id } });
+    const records = [];
+    for (const [sequence, value] of chunks.entries()) {
+      const content = value.content.trim();
+      const chunk = await this.prisma.knowledgeChunk.create({ data: { documentId: document.id, sequence, content, metadata: value.metadata, tokenCount: Math.ceil(content.length / 2), contentHash: knowledgeHash(content) } });
+      const embedding = await this.prisma.knowledgeEmbedding.create({ data: { chunkId: chunk.id, model: this.model, modelVersion: this.modelVersion, dimensions: 1024, status: EmbeddingStatus.PENDING } });
+      records.push({ chunk, embedding });
+    }
+    try {
+      const vectors = await this.embeddings.embed(records.map(({ chunk }) => chunk.content));
+      for (const [index, record] of records.entries()) {
+        const vector = vectors[index];
+        if (!vector) throw new EmbeddingClientError("EMBEDDING_INVALID_RESPONSE");
+        await this.prisma.$executeRaw(Prisma.sql`UPDATE "KnowledgeEmbedding" SET "embedding" = ${JSON.stringify(vector)}::vector WHERE "id" = ${record.embedding.id}::uuid`);
+        await this.prisma.knowledgeEmbedding.update({ where: { id: record.embedding.id }, data: { status: EmbeddingStatus.READY, embeddedAt: new Date(), attempts: { increment: 1 }, lastErrorCode: null } });
+      }
+      await this.prisma.knowledgeDocument.update({ where: { id: document.id }, data: { status: KnowledgeStatus.READY } });
+    } catch (error) {
+      const code = error instanceof EmbeddingClientError ? error.code : "EMBEDDING_FAILED";
+      await this.prisma.$transaction([
+        this.prisma.knowledgeEmbedding.updateMany({ where: { id: { in: records.map(({ embedding }) => embedding.id) } }, data: { status: EmbeddingStatus.FAILED, attempts: { increment: 1 }, lastErrorCode: code } }),
+        this.prisma.knowledgeDocument.update({ where: { id: document.id }, data: { status: KnowledgeStatus.FAILED } }),
+      ]);
+      throw error;
+    }
+    return document.id;
   }
 
   async syncPublicPlace(placeSourceId: string): Promise<string | null> {

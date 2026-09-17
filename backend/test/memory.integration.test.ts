@@ -8,6 +8,7 @@ import { PrismaService } from "../src/modules/database/prisma.service.js";
 import { MemoryService } from "../src/modules/memory/memory.service.js";
 import { IdentityService } from "../src/modules/auth/identity.service.js";
 import type { FastifyReply } from "fastify";
+import { KnowledgeKind, KnowledgeStatus, KnowledgeVisibility } from "@prisma/client";
 
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:55432/koreamate_v3";
 
@@ -60,11 +61,16 @@ describe("travel memory", () => {
     userId = user.id;
     await memories.upsertCandidates({ userId, guestId: null }, [{ kind: "pace", value: "balanced", confidence: 0.9 }]);
     await memories.upsertCandidates({ userId: null, guestId }, [{ kind: "pace", value: "relaxed", confidence: 0.95 }, { kind: "constraint", value: "不吃辣", confidence: 0.98 }]);
+    const conversation = await prisma.conversation.create({ data: { mode: "TRAVEL", guestId } });
+    const trip = await prisma.trip.create({ data: { conversationId: conversation.id } });
+    const resource = await prisma.tripResource.create({ data: { tripId: trip.id, kind: "guide-import", provider: "llm+kakao", query: {}, data: {}, expiresAt: new Date(Date.now() + 60_000) } });
+    const document = await prisma.knowledgeDocument.create({ data: { kind: KnowledgeKind.PERSONAL_EXPERIENCE, visibility: KnowledgeVisibility.PRIVATE, guestId, tripResourceId: resource.id, provider: "user-guide", externalId: `memory-${Date.now()}`, title: "私人攻略", rawContent: "上午去景福宫", contentHash: "a".repeat(64), status: KnowledgeStatus.PENDING } });
     const headers = new Map<string, string | string[]>();
     const reply = { raw: { getHeader: (name: string) => headers.get(name), setHeader: (name: string, value: string | string[]) => headers.set(name, value) } } as unknown as FastifyReply;
     await app.get(IdentityService).createSession(userId, guestId, reply);
     const merged = await memories.list({ userId, guestId: null });
     expect(merged.items.map((item) => item.value)).toEqual(["balanced", "咖啡店", "不吃辣"]);
     expect(await prisma.userMemory.count({ where: { guestId } })).toBe(0);
+    expect(await prisma.knowledgeDocument.findUnique({ where: { id: document.id } })).toMatchObject({ userId, guestId: null });
   });
 });

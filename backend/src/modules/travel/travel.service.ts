@@ -101,6 +101,8 @@ export class TravelService {
         await this.answerFlightQuestion(job, trip.id, requirements);
         return;
       }
+      const selectedGuidePlaces = this.selectedGuidePlaces(job.text);
+      if (selectedGuidePlaces) await this.guideImport.confirmSelection(trip.id, selectedGuidePlaces).catch(() => undefined);
       const result = await this.provider.plan({
         message: job.text,
         requirements: contextualRequirements,
@@ -475,6 +477,13 @@ export class TravelService {
 
   private hasGuideUrl(text: string): boolean {
     return /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.(?:cn|com))\//iu.test(text);
+  }
+
+  private selectedGuidePlaces(text: string): string[] | null {
+    const prefix = "请根据这些已核验的攻略地点生成行程：";
+    if (!text.startsWith(prefix)) return null;
+    const names = text.slice(prefix.length).split(/[、，,]/u).map((name) => name.trim()).filter(Boolean).slice(0, 30);
+    return names.length > 0 ? names : null;
   }
 
   private async answerWeatherQuestion(job: TravelJob, tripId: string, currentDestination: string | null, today: string): Promise<void> {

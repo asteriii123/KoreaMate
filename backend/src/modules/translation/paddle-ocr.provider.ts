@@ -11,18 +11,32 @@ const OcrResultSchema = z.object({
 
 export type OcrResult = z.infer<typeof OcrResultSchema>;
 
+export class PaddleOcrUnavailableError extends Error {
+  constructor() {
+    super("PADDLE_OCR_UNAVAILABLE");
+    this.name = "PaddleOcrUnavailableError";
+  }
+}
+
 @Injectable()
 export class PaddleOcrProvider implements OnModuleDestroy {
   private clientPromise: Promise<Client> | null = null;
 
   async recognize(image: string): Promise<OcrResult> {
     const url = process.env.PADDLEOCR_MCP_URL;
-    if (!url) throw new Error("PADDLEOCR_MCP_URL is not configured");
-    const result = await (await this.client(url)).callTool({ name: "ocr", arguments: { input_data: image } }, undefined, { timeout: 90_000 });
-    const content = result.content as Array<{ type?: string; text?: string }>;
-    const text = content.find((item) => item.type === "text")?.text;
-    if (!text || result.isError) throw new Error(text || "OCR returned no content");
-    return OcrResultSchema.parse(JSON.parse(text));
+    if (!url) throw new PaddleOcrUnavailableError();
+    try {
+      const result = await (await this.client(url)).callTool({ name: "ocr", arguments: { input_data: image } }, undefined, { timeout: 90_000 });
+      const content = result.content as Array<{ type?: string; text?: string }>;
+      const text = content.find((item) => item.type === "text")?.text;
+      if (!text || result.isError) throw new Error(text || "OCR returned no content");
+      return OcrResultSchema.parse(JSON.parse(text));
+    } catch {
+      const client = this.clientPromise;
+      this.clientPromise = null;
+      if (client) await (await client).close().catch(() => undefined);
+      throw new PaddleOcrUnavailableError();
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

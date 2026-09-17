@@ -519,7 +519,7 @@ function resizeImage(file: File): Promise<string> {
     const image = new Image();
     const url = URL.createObjectURL(file);
     image.onload = () => {
-      const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+      const scale = Math.min(1, 1280 / Math.max(image.width, image.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(image.width * scale));
       canvas.height = Math.max(1, Math.round(image.height * scale));

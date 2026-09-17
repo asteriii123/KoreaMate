@@ -25,7 +25,7 @@ def engine():
         with _lock:
             if _engine is None:
                 _engine = PaddleOCR(
-                    text_detection_model_name="PP-OCRv5_server_det",
+                    text_detection_model_name="PP-OCRv5_mobile_det",
                     text_recognition_model_name="korean_PP-OCRv5_mobile_rec",
                     use_doc_orientation_classify=False,
                     use_doc_unwarping=False,
@@ -43,6 +43,11 @@ def ocr(input_data: str) -> str:
     image = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError("Invalid image data")
+    height, width = image.shape[:2]
+    scale = min(1.0, 1280 / max(height, width), (1_600_000 / (height * width)) ** 0.5)
+    if scale < 1:
+        image = cv2.resize(image, (max(1, round(width * scale)), max(1, round(height * scale))), interpolation=cv2.INTER_AREA)
+    image = np.ascontiguousarray(image)
     lines = []
     for result in engine().predict(image):
         data = result.json["res"]

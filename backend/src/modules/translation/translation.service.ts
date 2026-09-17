@@ -7,7 +7,7 @@ import {
   TranslationProviderNotConfiguredError,
   type TranslationProvider,
 } from "./translation-provider.js";
-import { PaddleOcrProvider } from "./paddle-ocr.provider.js";
+import { PaddleOcrProvider, PaddleOcrUnavailableError } from "./paddle-ocr.provider.js";
 
 type TranslationJob = {
   jobId: string;
@@ -69,11 +69,14 @@ export class TranslationService {
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRANSLATION_READY" });
     } catch (error) {
       const notConfigured = error instanceof TranslationProviderNotConfiguredError;
+      const ocrUnavailable = error instanceof PaddleOcrUnavailableError;
       this.logger.error(`Translation job ${job.jobId} failed: ${error instanceof Error ? error.name : "UnknownError"}`);
       await this.finish(job.jobId, "FAILED", "job.failed", {
-        code: notConfigured ? "TRANSLATION_PROVIDER_NOT_CONFIGURED" : "TRANSLATION_PROVIDER_FAILED",
+        code: notConfigured ? "TRANSLATION_PROVIDER_NOT_CONFIGURED" : ocrUnavailable ? "OCR_SERVICE_UNAVAILABLE" : "TRANSLATION_PROVIDER_FAILED",
         message: notConfigured
           ? "翻译服务还没有配置 API Key。"
+          : ocrUnavailable
+            ? "图片识别服务刚刚中断，请重新发送这张图片。"
           : "翻译服务暂时不可用，请稍后重试。",
       });
     }

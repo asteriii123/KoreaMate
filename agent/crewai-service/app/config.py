@@ -1,5 +1,9 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 
 class AgentServiceSettings(BaseModel):

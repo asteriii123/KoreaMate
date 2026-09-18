@@ -7,12 +7,35 @@ import { HotelMcpProvider } from "../plan/hotels.js";
 import { SavedPlacesService } from "../saved/saved.service.js";
 import { MemoryService } from "../memory/memory.service.js";
 import type { Identity } from "../auth/identity.service.js";
+import { TravelService } from "../plan/plan.service.js";
+import { TranslationService } from "../translate/translate.service.js";
 
 type ToolPayload = { query?: string; provider?: string; [key: string]: unknown };
 
 @Controller("internal/agent-tools")
 export class AgentToolController {
-  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider, private readonly saved: SavedPlacesService, private readonly memories: MemoryService) {}
+  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider, private readonly saved: SavedPlacesService, private readonly memories: MemoryService, private readonly travel: TravelService, private readonly translation: TranslationService) {}
+
+  @Post("create-trip-plan")
+  async createTripPlan(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ accepted: true; jobId: string }> {
+    this.assertInternalKey(key);
+    const job = this.travelJob(body);
+    void this.travel.process(job);
+    return { accepted: true, jobId: job.jobId };
+  }
+
+  @Post("modify-trip-version")
+  async modifyTripVersion(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ accepted: true; jobId: string }> {
+    return this.createTripPlan(body, key);
+  }
+
+  @Post("translate-text")
+  async translateText(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ accepted: true; jobId: string }> {
+    this.assertInternalKey(key);
+    const jobId = String(body.jobId ?? "");
+    void this.translation.process({ jobId, conversationId: String(body.conversationId ?? ""), sourceMessageId: String(body.sourceMessageId ?? ""), text: String(body.text ?? ""), assetIds: [] });
+    return { accepted: true, jobId };
+  }
 
   @Post("saved-places")
   async savedPlaces(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
@@ -89,4 +112,5 @@ export class AgentToolController {
   }
 
   private identity(body: ToolPayload): Identity { return { userId: typeof body.userId === "string" ? body.userId : null, guestId: typeof body.guestId === "string" ? body.guestId : null }; }
+  private travelJob(body: ToolPayload): { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] } { return { jobId: String(body.jobId ?? ""), conversationId: String(body.conversationId ?? ""), sourceMessageId: String(body.sourceMessageId ?? ""), text: String(body.text ?? ""), images: Array.isArray(body.images) ? body.images as string[] : [] }; }
 }

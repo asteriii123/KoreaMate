@@ -1,12 +1,13 @@
 import { Body, Controller, Headers, Post } from "@nestjs/common";
 import { PlacesService } from "../place/place.service.js";
 import { CrewAiClientService } from "./crewai-client.service.js";
+import { OpenMeteoWeatherProvider } from "../plan/weather.js";
 
 type ToolPayload = { query?: string; provider?: string; [key: string]: unknown };
 
 @Controller("internal/agent-tools")
 export class AgentToolController {
-  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService) {}
+  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider) {}
 
   @Post("run")
   run(@Body() body: Record<string, unknown>, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
@@ -34,9 +35,14 @@ export class AgentToolController {
   }
 
   @Post("get-weather")
-  getWeather(@Headers("x-agent-service-key") key?: string): never {
+  async getWeather(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ weather: unknown | null }> {
     this.assertInternalKey(key);
-    throw new Error("Weather tool adapter is not wired yet");
+    const city = typeof body.city === "string" ? body.city.trim() : "";
+    const date = typeof body.date === "string" ? body.date : null;
+    if (!city) return { weather: null };
+    const place = (await this.places.search(city, "kakao"))[0];
+    if (!place) return { weather: null };
+    return { weather: await this.weather.forecast({ latitude: place.latitude, longitude: place.longitude, startDate: date, tripDays: 1, today: new Date().toISOString().slice(0, 10) }) };
   }
 
   @Post("search-flights")

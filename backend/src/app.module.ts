@@ -12,6 +12,7 @@ import { SavedPlacesModule } from "./saved/saved.module.js";
 import { MemoryModule } from "./memory/memory.module.js";
 import { KnowledgeModule } from "./knowledge/knowledge.module.js";
 import { ImageAssetsModule } from "./image/image.module.js";
+import { AgentModule } from "./agent/agent.module.js";
 
-@Module({ imports: [DatabaseModule, AuthModule, ImageAssetsModule, KnowledgeModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule, MemoryModule] })
+@Module({ imports: [DatabaseModule, AuthModule, ImageAssetsModule, KnowledgeModule, HealthModule, TranslationModule, TravelModule, PlacesModule, ConversationsModule, JobsModule, SpeechModule, SavedPlacesModule, MemoryModule, AgentModule] })
 export class AppModule {}

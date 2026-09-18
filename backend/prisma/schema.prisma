@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum ConversationMode {
+  UNIFIED
   TRAVEL
   TRANSLATION
 }
@@ -74,6 +75,7 @@ model Conversation {
   updatedAt    DateTime         @updatedAt
   messages     Message[]
   jobs         Job[]
+  agentRuns    AgentRun[]
   translations Translation[]
   trip         Trip?
   userId       String?          @db.Uuid
@@ -221,6 +223,7 @@ model Job {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   message        Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
   events         JobEvent[]
+  agentRuns      AgentRun[]
 }
 
 model JobEvent {
@@ -452,4 +455,59 @@ model ProviderCall {
   createdAt  DateTime @default(now())
 
   @@index([provider, createdAt])
+}
+
+model AgentRun {
+  id             String          @id @default(uuid()) @db.Uuid
+  conversationId String          @db.Uuid
+  jobId          String          @db.Uuid
+  status         String
+  model          String?
+  errorCode      String?
+  startedAt      DateTime        @default(now())
+  completedAt    DateTime?
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  job            Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  steps          AgentStep[]
+  checkpoints    AgentCheckpoint[]
+  @@index([conversationId, startedAt])
+  @@index([jobId])
+}
+
+model AgentStep {
+  id        String         @id @default(uuid()) @db.Uuid
+  runId     String         @db.Uuid
+  sequence  Int
+  kind      String
+  input     Json
+  output    Json?
+  createdAt DateTime       @default(now())
+  run       AgentRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  toolCalls AgentToolCall[]
+  @@unique([runId, sequence])
+}
+
+model AgentToolCall {
+  id             String    @id @default(uuid()) @db.Uuid
+  stepId         String    @db.Uuid
+  toolName       String
+  arguments      Json
+  result         Json?
+  status         String
+  durationMs     Int?
+  idempotencyKey String
+  createdAt      DateTime  @default(now())
+  step           AgentStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  @@unique([stepId, idempotencyKey])
+}
+
+model AgentCheckpoint {
+  id            String   @id @default(uuid()) @db.Uuid
+  runId         String   @db.Uuid
+  sequence      Int
+  context       Json
+  pendingAction Json?
+  createdAt     DateTime @default(now())
+  run           AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, sequence])
 }

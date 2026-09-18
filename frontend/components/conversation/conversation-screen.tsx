@@ -26,6 +26,7 @@ import { ImageTranslationCard } from "./image-translation-card";
 import { audioRecordingSupported, createAudioRecorder, recorderErrorMessage, type AudioRecorderController } from "../../lib/audio-recorder";
 import { speakKorean, speechSynthesisSupported, stopSpeaking } from "../../lib/speech-synthesis";
 import styles from "./conversation-screen.module.css";
+import { WelcomeFlow } from "./welcome-flow";
 
 type ConversationScreenProps = {
   mode: ConversationMode;
@@ -47,6 +48,12 @@ type TimelineItem =
 
 const subscribeToStaticCapability = () => () => undefined;
 const serverCapability = () => false;
+const subscribeToWelcome = (callback: () => void) => { window.addEventListener("storage", callback); window.addEventListener("koreamate-welcome-changed", callback); return () => { window.removeEventListener("storage", callback); window.removeEventListener("koreamate-welcome-changed", callback); }; };
+const welcomeVisible = () => {
+  if (new URLSearchParams(window.location.search).get("welcome") === "1") return true;
+  return localStorage.getItem("koreamate-welcome-seen") !== "true";
+};
+const welcomeHiddenOnServer = () => false;
 
 export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing: boolean): boolean {
   return key === "Enter" && !shiftKey && !isComposing;
@@ -63,6 +70,14 @@ function weatherText(plan: TripPlan): string | null {
   if (!day) return null;
   const rain = Math.max(...plan.weather.days.map((value) => value.precipitationProbability));
   return `${Math.round(day.temperatureMin)}–${Math.round(day.temperatureMax)}°C · 降雨概率最高 ${rain}%`;
+}
+
+function AssistantAnswer({ text }: { text: string }) {
+  const blocks = text.split(/\n+/u).map((value) => value.trim()).filter(Boolean);
+  const lines = blocks.length > 1 ? blocks : text.split(/(?=\d+[、.)])/u).map((value) => value.trim()).filter(Boolean);
+  return <article className={styles.answerCard}>
+    {lines.map((line, index) => /^\d+[、.)]/u.test(line) ? <div className={styles.answerItem} key={`${line}-${index}`}><span>{line.match(/^\d+/u)?.[0]}</span><p>{line.replace(/^\d+[、.)]\s*/u, "")}</p></div> : <p className={styles.answerParagraph} key={`${line}-${index}`}>{line}</p>)}
+  </article>;
 }
 
 export function ConversationScreen({
@@ -88,6 +103,9 @@ export function ConversationScreen({
   const [transcribing, setTranscribing] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const welcomeReady = useSyncExternalStore(subscribeToWelcome, welcomeVisible, welcomeHiddenOnServer);
+  const forceWelcome = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("welcome") === "1";
+  const showWelcome = mode === "UNIFIED" && (forceWelcome || !welcomeReady);
   const [savedPlaces, setSavedPlaces] = useState<Record<string, string>>({});
   const canRecordAudio = useSyncExternalStore(subscribeToStaticCapability, audioRecordingSupported, serverCapability);
   const canSpeak = useSyncExternalStore(subscribeToStaticCapability, speechSynthesisSupported, serverCapability);
@@ -111,7 +129,9 @@ export function ConversationScreen({
     }).catch(() => setError("这条历史记录暂时无法打开。"));
   }, [mode]);
 
-  useEffect(() => { if (mode !== "TRAVEL") return; void listSavedPlaces().then(({ items }) => setSavedPlaces(Object.fromEntries(items.map((item) => [item.placeId, item.id])))).catch(() => undefined); }, [mode]);
+  function finishWelcome(): void { localStorage.setItem("koreamate-welcome-seen", "true"); window.dispatchEvent(new Event("koreamate-welcome-changed")); }
+
+  useEffect(() => { if (mode === "TRANSLATION") return; void listSavedPlaces().then(({ items }) => setSavedPlaces(Object.fromEntries(items.map((item) => [item.placeId, item.id])))).catch(() => undefined); }, [mode]);
 
   async function toggleSaved(placeId: string): Promise<void> {
     const savedId = savedPlaces[placeId];
@@ -137,14 +157,14 @@ export function ConversationScreen({
     setStatus("正在接收你的想法…");
     setInput("");
     setImages([]);
-    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text: text || `已上传 ${attachedImages.length} 张${mode === "TRANSLATION" ? "待翻译照片" : "攻略截图"}` }]);
+    setTimeline((current) => [...current, { id: crypto.randomUUID(), kind: "user", text: text || `已上传 ${attachedImages.length} 张${mode === "TRAVEL" ? "攻略截图" : "待翻译照片"}` }]);
 
     try {
       if (!conversationId.current) {
         conversationId.current = (await createConversation(mode)).id;
       }
-      const isImageTranslation = mode === "TRANSLATION" && attachedImages.length > 0;
-      const isImport = mode === "TRAVEL" && isGuideImport(text, attachedImages.length);
+      const isImageTranslation = mode !== "TRAVEL" && attachedImages.length > 0;
+      const isImport = mode !== "TRANSLATION" && mode !== "UNIFIED" && isGuideImport(text, attachedImages.length);
       const accepted = isImageTranslation
         ? await sendImageTranslationMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
         : isImport
@@ -152,6 +172,11 @@ export function ConversationScreen({
         : await sendTextMessage(conversationId.current, text, crypto.randomUUID());
       const stream = new EventSource(jobEventsUrl(accepted.jobId), { withCredentials: true });
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
+      stream.addEventListener("conversation.started", () => setStatus("正在开始理解你的话…"));
+      stream.addEventListener("conversation.understanding", () => setStatus("正在理解你的需求…"));
+      stream.addEventListener("conversation.routing", () => setStatus("正在判断要帮你做什么…"));
+      stream.addEventListener("conversation.executing", () => setStatus("正在整理结果…"));
+      stream.addEventListener("conversation.result.ready", () => setStatus("结果准备好了"));
       stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
       stream.addEventListener("translation.image.started", () => setStatus("正在识别图片里的韩文…"));
       stream.addEventListener("translation.image.ocr.ready", () => setStatus("文字识别完成，正在整理中文…"));
@@ -210,6 +235,7 @@ export function ConversationScreen({
       });
       stream.addEventListener("travel.memory.updated", (rawEvent) => {
         const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        if (event.data.action === "saved") return;
         const answer = typeof event.data.answer === "string" ? event.data.answer : null;
         const summary = typeof event.data.summary === "string" ? event.data.summary : "旅行偏好";
         setTimeline((current) => [...current, { id: event.eventId, kind: "question", text: answer ?? `已记住：${summary}` }]);
@@ -341,6 +367,8 @@ export function ConversationScreen({
     setConfirmedTrips((current) => ({ ...current, [plan.tripId]: true }));
   }
 
+  if (showWelcome) return <WelcomeFlow onFinish={finishWelcome} />;
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -359,7 +387,7 @@ export function ConversationScreen({
         </div>
         {timeline.map((item) => {
           if (item.kind === "user") return <p className={styles.bubble} key={item.id}>{item.text}</p>;
-          if (item.kind === "question") return <p className={styles.assistantBubble} key={item.id}>{item.text}</p>;
+          if (item.kind === "question") return <AssistantAnswer key={item.id} text={item.text} />;
           if (item.kind === "translation") {
             const translation = item.value;
             return <article className={styles.translation} key={item.id}>
@@ -466,7 +494,7 @@ export function ConversationScreen({
 
       <div className={styles.composerWrap}>
         <form className={styles.composer} onSubmit={submit}>
-          {mode === "TRAVEL" || mode === "TRANSLATION" ? <>
+          {mode === "TRAVEL" || mode === "TRANSLATION" || mode === "UNIFIED" ? <>
             <input ref={fileInput} className={styles.visuallyHidden} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void handleFiles(event)} />
             <button className={styles.attach} type="button" aria-label={mode === "TRAVEL" ? "上传攻略截图" : "上传需要翻译的照片"} onClick={() => fileInput.current?.click()}>
               <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>

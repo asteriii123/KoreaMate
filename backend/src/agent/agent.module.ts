@@ -9,6 +9,7 @@ import { MemoryModule } from "../memory/memory.module.js";
 import { TranslationModule } from "../translate/translate.module.js";
 import { DatabaseModule } from "../database/database.module.js";
 import { AgentRunService } from "./agent-run.service.js";
+import { CitationsModule } from "../citation/citation.module.js";
 
-@Module({ imports: [DatabaseModule, PlacesModule, TravelModule, SavedPlacesModule, MemoryModule, TranslationModule], controllers: [AgentToolController], providers: [CrewAiClientService, AgentRunService, OpenMeteoWeatherProvider], exports: [CrewAiClientService, AgentRunService] })
+@Module({ imports: [DatabaseModule, CitationsModule, PlacesModule, TravelModule, SavedPlacesModule, MemoryModule, TranslationModule], controllers: [AgentToolController], providers: [CrewAiClientService, AgentRunService, OpenMeteoWeatherProvider], exports: [CrewAiClientService, AgentRunService] })
 export class AgentModule {}

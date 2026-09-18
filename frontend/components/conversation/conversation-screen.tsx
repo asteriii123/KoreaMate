@@ -34,6 +34,7 @@ type ConversationScreenProps = {
   heading: string;
   description: string;
   placeholder: string;
+  initialWelcome?: boolean;
 };
 
 type TimelineItem =
@@ -86,6 +87,7 @@ export function ConversationScreen({
   heading,
   description,
   placeholder,
+  initialWelcome = false,
 }: ConversationScreenProps) {
   const conversationId = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -103,9 +105,18 @@ export function ConversationScreen({
   const [transcribing, setTranscribing] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
-  const welcomeReady = useSyncExternalStore(subscribeToWelcome, welcomeVisible, welcomeHiddenOnServer);
-  const forceWelcome = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("welcome") === "1";
-  const showWelcome = mode === "UNIFIED" && (forceWelcome || !welcomeReady);
+  const [welcomeReady, setWelcomeReady] = useState(initialWelcome);
+  const [forceWelcome, setForceWelcome] = useState(false);
+  useEffect(() => {
+    const forced = new URLSearchParams(window.location.search).get("welcome") === "1";
+    setForceWelcome(forced);
+    if (forced) {
+      localStorage.removeItem("koreamate-welcome-seen");
+      window.dispatchEvent(new Event("koreamate-welcome-changed"));
+    }
+    setWelcomeReady(welcomeVisible());
+  }, []);
+  const showWelcome = mode === "UNIFIED" && (welcomeReady || forceWelcome);
   const [savedPlaces, setSavedPlaces] = useState<Record<string, string>>({});
   const canRecordAudio = useSyncExternalStore(subscribeToStaticCapability, audioRecordingSupported, serverCapability);
   const canSpeak = useSyncExternalStore(subscribeToStaticCapability, speechSynthesisSupported, serverCapability);
@@ -129,7 +140,7 @@ export function ConversationScreen({
     }).catch(() => setError("这条历史记录暂时无法打开。"));
   }, [mode]);
 
-  function finishWelcome(): void { localStorage.setItem("koreamate-welcome-seen", "true"); window.dispatchEvent(new Event("koreamate-welcome-changed")); }
+  function finishWelcome(): void { localStorage.setItem("koreamate-welcome-seen", "true"); setWelcomeReady(false); setForceWelcome(false); window.dispatchEvent(new Event("koreamate-welcome-changed")); }
 
   useEffect(() => { if (mode === "TRANSLATION") return; void listSavedPlaces().then(({ items }) => setSavedPlaces(Object.fromEntries(items.map((item) => [item.placeId, item.id])))).catch(() => undefined); }, [mode]);
 

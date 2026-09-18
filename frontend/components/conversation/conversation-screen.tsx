@@ -182,12 +182,29 @@ export function ConversationScreen({
         ? await sendImportMessage(conversationId.current, text, attachedImages, crypto.randomUUID())
         : await sendTextMessage(conversationId.current, text, crypto.randomUUID());
       const stream = new EventSource(jobEventsUrl(accepted.jobId), { withCredentials: true });
+      const streamedReplyId = crypto.randomUUID();
+      stream.onopen = () => setStatus("正在实时连接 Agent…");
       stream.addEventListener("message.accepted", () => setStatus("已收到，正在准备下一步…"));
       stream.addEventListener("conversation.started", () => setStatus("正在开始理解你的话…"));
       stream.addEventListener("conversation.understanding", () => setStatus("正在理解你的需求…"));
       stream.addEventListener("conversation.routing", () => setStatus("正在判断要帮你做什么…"));
       stream.addEventListener("conversation.executing", () => setStatus("正在整理结果…"));
       stream.addEventListener("conversation.result.ready", () => setStatus("结果准备好了"));
+      stream.addEventListener("agent.started", () => setStatus("正在启动 Agent…"));
+      stream.addEventListener("agent.thinking", () => setStatus("Agent 正在分析上下文并选择工具…"));
+      stream.addEventListener("agent.tool.started", () => setStatus("正在调用旅行工具…"));
+      stream.addEventListener("agent.tool.completed", () => setStatus("工具结果已返回，正在整理…"));
+      stream.addEventListener("agent.reply.delta", (rawEvent) => {
+        const event = JobEventSchema.parse(JSON.parse((rawEvent as MessageEvent<string>).data));
+        const delta = typeof event.data.delta === "string" ? event.data.delta : "";
+        if (!delta) return;
+        setTimeline((current) => {
+          const existing = current.find((item) => item.id === streamedReplyId);
+          if (!existing || existing.kind !== "question") return [...current, { id: streamedReplyId, kind: "question", text: delta }];
+          return current.map((item) => item.id === streamedReplyId && item.kind === "question" ? { ...item, text: item.text + delta } : item);
+        });
+        setStatus("正在输出结果…");
+      });
       stream.addEventListener("translation.started", () => setStatus("正在理解这句话…"));
       stream.addEventListener("translation.image.started", () => setStatus("正在识别图片里的韩文…"));
       stream.addEventListener("translation.image.ocr.ready", () => setStatus("文字识别完成，正在整理中文…"));
@@ -289,9 +306,8 @@ export function ConversationScreen({
         stream.close();
       });
       stream.onerror = () => {
-        setStatus("内容已发送，进度连接暂时中断。");
-        setBusy(false);
-        stream.close();
+        // EventSource 会自动带着 Last-Event-ID 重连；不要关闭连接或把任务标记为失败。
+        setStatus("连接暂时中断，正在自动恢复进度…");
       };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "暂时无法完成，请稍后再试。");

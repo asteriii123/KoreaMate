@@ -50,6 +50,7 @@ export class ConversationService {
 
   private async processWithCrewAi(job: Job, identity: { userId: string | null; guestId: string | null }): Promise<void> {
     await this.event(job.jobId, "agent.started", { message: "正在理解你的需求…" });
+    await this.event(job.jobId, "agent.thinking", { message: "Agent 正在分析上下文并选择工具…" });
     const context = await this.context(job.conversationId, job.text);
     try {
       const result = await this.crewAi.run({
@@ -71,6 +72,10 @@ export class ConversationService {
       } else {
         const reply = result.reply ?? "已完成处理。";
         await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: reply } as Prisma.InputJsonValue } });
+        for (let offset = 0; offset < reply.length; offset += 24) {
+          await this.event(job.jobId, "agent.reply.delta", { delta: reply.slice(offset, offset + 24) });
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
         await this.event(job.jobId, "agent.result.ready", { reply });
       }
       await this.finish(job.jobId);

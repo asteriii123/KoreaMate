@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ConversationModeSchema = z.enum(["TRAVEL", "TRANSLATION"]);
+export const ConversationModeSchema = z.enum(["UNIFIED", "TRAVEL", "TRANSLATION"]);
 
 export const CreateConversationRequestSchema = z.object({
   mode: ConversationModeSchema,
@@ -52,6 +52,19 @@ export const AcceptedMessageSchema = z.object({
   status: z.literal("ACCEPTED"),
 });
 
+export const ConversationActionSchema = z.enum([
+  "ask_requirement", "answer_travel_question", "recommend_places", "create_plan", "modify_plan",
+  "search_weather", "search_hotel", "search_flight", "manage_saved_place", "translate_text",
+  "translate_image", "translate_audio", "answer",
+]);
+export const ConversationDecisionSchema = z.object({
+  kind: z.enum(["travel", "translation", "general"]),
+  action: ConversationActionSchema,
+  reply: z.string().nullable(),
+  parameters: z.record(z.string(), z.unknown()),
+});
+export type ConversationDecision = z.infer<typeof ConversationDecisionSchema>;
+
 export const JobEventTypeSchema = z.enum([
   "message.accepted",
   "translation.started",
@@ -73,6 +86,20 @@ export const JobEventTypeSchema = z.enum([
   "travel.memory.question",
   "job.completed",
   "job.failed",
+  "conversation.started",
+  "conversation.understanding",
+  "conversation.routing",
+  "conversation.executing",
+  "conversation.result.ready",
+  "agent.started",
+  "agent.thinking",
+  "agent.tool.started",
+  "agent.tool.completed",
+  "agent.reply.delta",
+  "agent.question",
+  "agent.confirmation.required",
+  "agent.result.ready",
+  "agent.failed",
 ]);
 
 export const TranslationResultSchema = z.object({

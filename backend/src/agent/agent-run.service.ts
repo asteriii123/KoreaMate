@@ -12,6 +12,12 @@ export class AgentRunService {
 
   async finish(id: string, status: "COMPLETED" | "FAILED", output?: unknown): Promise<void> {
     await this.prisma.agentRun.update({ where: { id }, data: { status, completedAt: new Date() } });
-    if (output !== undefined) await this.prisma.agentStep.create({ data: { runId: id, sequence: 1, kind: "final", input: {}, output: JSON.parse(JSON.stringify(output)) as Prisma.InputJsonValue } });
+    if (output !== undefined) {
+      const json = JSON.parse(JSON.stringify(output)) as Prisma.InputJsonValue;
+      await this.prisma.agentStep.create({ data: { runId: id, sequence: 1, kind: "final", input: {}, output: json } });
+      if (status === "COMPLETED" && output && typeof output === "object" && "pending_action" in output) {
+        await this.prisma.agentCheckpoint.create({ data: { runId: id, sequence: 1, context: json, pendingAction: json } });
+      }
+    }
   }
 }

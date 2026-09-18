@@ -1,11 +1,29 @@
 import { Body, Controller, Headers, Post } from "@nestjs/common";
 import { PlacesService } from "../place/place.service.js";
+import { CrewAiClientService } from "./crewai-client.service.js";
 
 type ToolPayload = { query?: string; provider?: string; [key: string]: unknown };
 
 @Controller("internal/agent-tools")
 export class AgentToolController {
-  constructor(private readonly places: PlacesService) {}
+  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService) {}
+
+  @Post("run")
+  run(@Body() body: Record<string, unknown>, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
+    this.assertInternalKey(key);
+    return this.crewAi.run({
+      runId: String(body.runId ?? body.run_id ?? ""),
+      conversationId: String(body.conversationId ?? body.conversation_id ?? ""),
+      jobId: String(body.jobId ?? body.job_id ?? ""),
+      userId: typeof body.userId === "string" ? body.userId : null,
+      guestId: typeof body.guestId === "string" ? body.guestId : null,
+      message: String(body.message ?? ""),
+      attachments: Array.isArray(body.attachments) ? body.attachments : [],
+      recentMessages: Array.isArray(body.recentMessages) ? body.recentMessages as Array<{ role: string; text: string }> : [],
+      requirements: body.requirements && typeof body.requirements === "object" ? body.requirements as Record<string, unknown> : null,
+      previousPlan: body.previousPlan && typeof body.previousPlan === "object" ? body.previousPlan as Record<string, unknown> : null,
+    });
+  }
 
   @Post("search-places")
   async searchPlaces(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ places: unknown[] }> {

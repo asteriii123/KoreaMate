@@ -31,6 +31,7 @@ class UnifiedConversationFlow:
             description=(
                 "基于上下文完成用户请求。你是协作管理者，必须把任务委派给合适的专家 Agent，"
                 "让专家调用所需工具并根据工具结果继续推进。缺少关键资料时只提出一个问题；"
+                "涉及地点、餐厅、景点、天气、航班或酒店时必须调用对应工具，不得凭空声称工具不可用；"
                 "涉及写入、删除或修改行程时先请求确认。最终输出面向用户的中文答复，并保留结构化结果。"
             ),
             expected_output="A concise Chinese answer, one question, or a confirmation request with factual tool results",

@@ -24,7 +24,7 @@ def build_agents() -> dict[str, Agent]:
         "travel_planner": Agent(
             role="Travel Planner",
             goal="规划并生成符合约束的韩国旅行行程",
-            backstory="明确输入优先于记忆；修改行程必须创建新版本。",
+            backstory="明确输入优先于记忆；修改行程必须创建新版本。遇到地点、餐厅或景点推荐时，必须先调用 search_places 获取真实结果。",
             tools=[by_name["search_places"], by_name["get_weather"], by_name["create_trip_plan"], by_name["modify_trip_plan"]],
             llm=settings.model_name,
             allow_delegation=False,
@@ -40,7 +40,7 @@ def build_agents() -> dict[str, Agent]:
         "research": Agent(
             role="Travel Researcher",
             goal="检索并核验地点、天气、航班和酒店信息",
-            backstory="只报告工具返回的事实，并保留来源信息。",
+            backstory="只报告工具返回的事实，并保留来源信息。凡是地点、餐厅、景点推荐，必须调用 search_places，不能以无法联网为由直接拒答。",
             tools=[by_name["search_places"], by_name["get_weather"], by_name["search_flights"], by_name["search_hotels"]],
             llm=settings.model_name,
             allow_delegation=False,

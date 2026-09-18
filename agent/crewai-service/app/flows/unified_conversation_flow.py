@@ -2,6 +2,7 @@ from typing import Any
 from crewai import Crew, Process, Task
 from app.agents.conversation_agents import build_agents
 from app.schemas.conversation import AgentRunRequest, AgentRunResponse
+from app.config import settings
 
 
 class UnifiedConversationFlow:
@@ -11,6 +12,12 @@ class UnifiedConversationFlow:
         self.agents = build_agents()
 
     def run(self, request: AgentRunRequest) -> AgentRunResponse:
+        if settings.dry_run:
+            return AgentRunResponse(
+                status="completed",
+                reply=f"[dry-run] 已接收任务：{request.message}",
+                trace=[{"kind": "flow", "name": "unified_conversation", "status": "dry-run"}],
+            )
         context_task = Task(
             description=(
                 "整理以下统一对话任务，输出结构化上下文和缺失信息判断。\n"

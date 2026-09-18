@@ -1,5 +1,6 @@
 from typing import Any, Type
 import httpx
+import os
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 from app.config import settings
@@ -23,6 +24,7 @@ class NestJsDomainTool(BaseTool):
             f"{settings.nestjs_tool_api_url}/{self.endpoint}",
             json=body,
             timeout=30,
+            headers={"x-agent-service-key": os.getenv("AGENT_INTERNAL_SERVICE_KEY", "")},
         )
         response.raise_for_status()
         return response.json()

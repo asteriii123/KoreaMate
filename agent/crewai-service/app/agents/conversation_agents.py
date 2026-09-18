@@ -19,7 +19,7 @@ def build_agents() -> dict[str, Agent]:
             goal="识别用户的单领域或组合任务，并选择最小必要工具集合",
             backstory="你负责路由，不提前编造工具结果。",
             llm=settings.model_name,
-            allow_delegation=False,
+            allow_delegation=True,
         ),
         "travel_planner": Agent(
             role="Travel Planner",

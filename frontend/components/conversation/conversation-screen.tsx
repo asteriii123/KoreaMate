@@ -74,7 +74,17 @@ function weatherText(plan: TripPlan): string | null {
 }
 
 function AssistantAnswer({ text }: { text: string }) {
-  const blocks = text.split(/\n+/u).map((value) => value.trim()).filter(Boolean);
+  const cleaned = text
+    .replace(/```[\s\S]*?```/gu, "")
+    .replace(/^\s*\|?\s*-{2,}(?:\s*\|\s*-{2,})+\s*\|?\s*$/gmu, "")
+    .replace(/^\s*\|\s*/gmu, "")
+    .replace(/\s*\|\s*/gu, " · ")
+    .replace(/\*\*(.*?)\*\*/gu, "$1")
+    .replace(/`([^`]+)`/gu, "$1")
+    .replace(/^#{1,6}\s*/gmu, "")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+  const blocks = cleaned.split(/\n+/u).map((value) => value.trim()).filter(Boolean);
   const lines = blocks.length > 1 ? blocks : text.split(/(?=\d+[、.)])/u).map((value) => value.trim()).filter(Boolean);
   return <article className={styles.answerCard}>
     {lines.map((line, index) => /^\d+[、.)]/u.test(line) ? <div className={styles.answerItem} key={`${line}-${index}`}><span>{line.match(/^\d+/u)?.[0]}</span><p>{line.replace(/^\d+[、.)]\s*/u, "")}</p></div> : <p className={styles.answerParagraph} key={`${line}-${index}`}>{line}</p>)}

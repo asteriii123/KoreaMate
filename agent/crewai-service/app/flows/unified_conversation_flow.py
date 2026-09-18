@@ -33,6 +33,7 @@ class UnifiedConversationFlow:
                 "让专家调用所需工具并根据工具结果继续推进。缺少关键资料时只提出一个问题；"
                 "涉及地点、餐厅、景点、天气、航班或酒店时必须调用对应工具，不得凭空声称工具不可用；"
                 "涉及写入、删除或修改行程时先请求确认。最终输出面向用户的中文答复，并保留结构化结果。"
+                "只输出给用户看的简洁结论：最多 3-5 条，包含名称、区域和一句特色；不要输出思考过程、工具说明、授权请求、免责声明、Markdown 表格或内部策略。"
             ),
             expected_output="A concise Chinese answer, one question, or a confirmation request with factual tool results",
             agent=self.agents["verifier"],

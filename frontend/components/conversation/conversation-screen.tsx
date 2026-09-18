@@ -190,6 +190,7 @@ export function ConversationScreen({
       stream.addEventListener("conversation.routing", () => setStatus("正在判断要帮你做什么…"));
       stream.addEventListener("conversation.executing", () => setStatus("正在整理结果…"));
       stream.addEventListener("conversation.result.ready", () => setStatus("结果准备好了"));
+      stream.addEventListener("agent.result.ready", () => setStatus(""));
       stream.addEventListener("agent.started", () => setStatus("正在启动 Agent…"));
       stream.addEventListener("agent.thinking", () => setStatus("Agent 正在分析上下文并选择工具…"));
       stream.addEventListener("agent.tool.started", () => setStatus("正在调用旅行工具…"));
@@ -296,6 +297,7 @@ export function ConversationScreen({
       });
       stream.addEventListener("job.completed", () => {
         setBusy(false);
+        setStatus("");
         stream.close();
       });
       stream.addEventListener("job.failed", (rawEvent) => {

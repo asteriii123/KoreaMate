@@ -4,12 +4,36 @@ import { CrewAiClientService } from "./crewai-client.service.js";
 import { OpenMeteoWeatherProvider } from "../plan/weather.js";
 import { FlightMcpProvider } from "../plan/flights.js";
 import { HotelMcpProvider } from "../plan/hotels.js";
+import { SavedPlacesService } from "../saved/saved.service.js";
+import { MemoryService } from "../memory/memory.service.js";
+import type { Identity } from "../auth/identity.service.js";
 
 type ToolPayload = { query?: string; provider?: string; [key: string]: unknown };
 
 @Controller("internal/agent-tools")
 export class AgentToolController {
-  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider) {}
+  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider, private readonly saved: SavedPlacesService, private readonly memories: MemoryService) {}
+
+  @Post("saved-places")
+  async savedPlaces(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
+    this.assertInternalKey(key);
+    const identity = this.identity(body);
+    const action = String(body.action ?? "list");
+    if (action === "list") return this.saved.list(identity);
+    if (action === "create" && typeof body.placeId === "string") return this.saved.create(identity, body.placeId, typeof body.note === "string" ? body.note : null);
+    if (action === "remove" && typeof body.placeId === "string") return { removed: await this.saved.removePlace(identity, body.placeId) };
+    return { error: "INVALID_SAVED_PLACE_ACTION" };
+  }
+
+  @Post("memory")
+  async memory(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
+    this.assertInternalKey(key);
+    const identity = this.identity(body);
+    if (body.action === "list") return this.memories.list(identity);
+    if (body.action === "remove" && typeof body.memoryId === "string") { await this.memories.remove(identity, body.memoryId); return { removed: true }; }
+    if (body.action === "upsert" && Array.isArray(body.candidates)) return { items: await this.memories.upsertCandidates(identity, body.candidates as never[]) };
+    return { error: "INVALID_MEMORY_ACTION" };
+  }
 
   @Post("run")
   run(@Body() body: Record<string, unknown>, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
@@ -63,4 +87,6 @@ export class AgentToolController {
     const expected = process.env.AGENT_INTERNAL_SERVICE_KEY;
     if (!expected || key !== expected) throw new Error("Invalid agent service key");
   }
+
+  private identity(body: ToolPayload): Identity { return { userId: typeof body.userId === "string" ? body.userId : null, guestId: typeof body.guestId === "string" ? body.guestId : null }; }
 }

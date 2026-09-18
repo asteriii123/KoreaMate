@@ -16,8 +16,8 @@ def build_agents() -> dict[str, Agent]:
         ),
         "intent_router": Agent(
             role="Intent Router",
-            goal="识别用户的单领域或组合任务，并选择最小必要工具集合",
-            backstory="你负责路由，不提前编造工具结果。",
+            goal="识别用户的单领域或组合任务，并把任务委派给最合适的专家完成",
+            backstory="你负责路由和监督。地点、餐厅、景点请求必须委派给 Research Agent；不要声称工具未启用，也不要编造搜索结果。等待专家返回真实工具结果后再汇总。",
             llm=settings.model_name,
             allow_delegation=True,
         ),

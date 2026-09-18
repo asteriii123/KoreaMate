@@ -32,6 +32,6 @@ import { KnowledgeModule } from "../knowledge/knowledge.module.js";
     OpenAiCompatibleTravelProvider,
     { provide: TRAVEL_PROVIDER, useExisting: OpenAiCompatibleTravelProvider },
   ],
-  exports: [TravelService],
+  exports: [TravelService, HotelMcpProvider, FlightMcpProvider, RemoteMcpClientService],
 })
 export class TravelModule {}

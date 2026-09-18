@@ -2,12 +2,14 @@ import { Body, Controller, Headers, Post } from "@nestjs/common";
 import { PlacesService } from "../place/place.service.js";
 import { CrewAiClientService } from "./crewai-client.service.js";
 import { OpenMeteoWeatherProvider } from "../plan/weather.js";
+import { FlightMcpProvider } from "../plan/flights.js";
+import { HotelMcpProvider } from "../plan/hotels.js";
 
 type ToolPayload = { query?: string; provider?: string; [key: string]: unknown };
 
 @Controller("internal/agent-tools")
 export class AgentToolController {
-  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider) {}
+  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider) {}
 
   @Post("run")
   run(@Body() body: Record<string, unknown>, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
@@ -46,15 +48,15 @@ export class AgentToolController {
   }
 
   @Post("search-flights")
-  searchFlights(@Headers("x-agent-service-key") key?: string): never {
+  async searchFlights(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ result: unknown | null }> {
     this.assertInternalKey(key);
-    throw new Error("Flight tool adapter is not wired yet");
+    try { return { result: await this.flights.search({ fromCity: String(body.fromCity ?? ""), toCity: String(body.toCity ?? ""), departureDate: String(body.departureDate ?? "") }) }; } catch { return { result: null }; }
   }
 
   @Post("search-hotels")
-  searchHotels(@Headers("x-agent-service-key") key?: string): never {
+  async searchHotels(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ result: unknown | null }> {
     this.assertInternalKey(key);
-    throw new Error("Hotel tool adapter is not wired yet");
+    try { return { result: await this.hotels.search({ destination: String(body.destination ?? ""), checkIn: String(body.checkIn ?? ""), checkOut: String(body.checkOut ?? ""), guests: Number(body.guests ?? 1), query: typeof body.query === "string" ? body.query : undefined }) }; } catch { return { result: null }; }
   }
 
   private assertInternalKey(key?: string): void {

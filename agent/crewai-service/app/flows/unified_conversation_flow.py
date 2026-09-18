@@ -38,7 +38,7 @@ class UnifiedConversationFlow:
             context=[context_task],
         )
         crew = Crew(
-            agents=list(self.agents.values()),
+            agents=[agent for name, agent in self.agents.items() if name != "intent_router"],
             tasks=[context_task, execution_task],
             process=Process.hierarchical,
             manager_agent=self.agents["intent_router"],

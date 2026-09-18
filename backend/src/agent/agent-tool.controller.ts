@@ -75,6 +75,25 @@ export class AgentToolController {
     });
   }
 
+  @Post("resume")
+  resume(@Body() body: Record<string, unknown>, @Headers("x-agent-service-key") key?: string): Promise<unknown> {
+    this.assertInternalKey(key);
+    const originalRunId = String(body.runId ?? body.run_id ?? "");
+    const confirmation = String(body.confirmation ?? "已确认执行");
+    return this.crewAi.run({
+      runId: crypto.randomUUID(),
+      conversationId: String(body.conversationId ?? body.conversation_id ?? ""),
+      jobId: String(body.jobId ?? body.job_id ?? ""),
+      userId: typeof body.userId === "string" ? body.userId : null,
+      guestId: typeof body.guestId === "string" ? body.guestId : null,
+      message: `用户确认执行原任务 ${originalRunId}：${confirmation}`,
+      attachments: [],
+      recentMessages: [],
+      requirements: body.requirements && typeof body.requirements === "object" ? body.requirements as Record<string, unknown> : null,
+      previousPlan: body.previousPlan && typeof body.previousPlan === "object" ? body.previousPlan as Record<string, unknown> : null,
+    });
+  }
+
   @Post("search-places")
   async searchPlaces(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ places: unknown[] }> {
     this.assertInternalKey(key);

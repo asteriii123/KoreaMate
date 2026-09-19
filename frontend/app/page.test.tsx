@@ -1,13 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import HomePage from "./page";
 
 describe("HomePage", () => {
-  it("shows exactly the two primary product entries", () => {
+  it("opens the unified conversation entry", async () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("link", { name: /帮我规划韩国旅行/ })).toHaveAttribute("href", "/travel");
-    expect(screen.getByRole("link", { name: /帮我翻译韩语/ })).toHaveAttribute("href", "/translate");
-    expect(screen.getAllByRole("link")).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "想去韩国怎么玩？" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "跳过介绍" }));
+    expect(await screen.findByRole("textbox", { name: "输入内容" })).toHaveAttribute("placeholder", "告诉我你想去哪里，或者直接发来一句韩语…");
   });
 });

@@ -10,7 +10,7 @@
   align-items: center;
   gap: 16px;
   min-height: 64px;
-  padding: 10px max(20px, calc((100vw - 720px) / 2));
+  padding: 10px max(28px, calc((100vw - 1120px) / 2));
   border-bottom: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
   backdrop-filter: blur(18px);
@@ -33,19 +33,19 @@
 }
 
 .conversation {
-  width: min(100%, 720px);
+  width: min(100%, 1120px);
   margin: 0 auto;
-  padding: 32px 20px 144px;
+  padding: 48px 40px 164px;
 }
 
 .intro {
-  max-width: 34rem;
-  margin: 8vh 0 32px;
+  max-width: 760px;
+  margin: 10vh 0 44px;
 }
 
 .intro h1 {
   margin: 0 0 12px;
-  font-size: clamp(2rem, 9vw, 3.5rem);
+  font-size: clamp(2.4rem, 6vw, 4.5rem);
   letter-spacing: -0.05em;
   line-height: 1.05;
 }
@@ -77,6 +77,23 @@
   border: 1px solid var(--color-border);
   line-height: 1.55;
 }
+
+.answerCard {
+  width: min(780px, 88%);
+  padding: 20px 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 22px 22px 22px 6px;
+  background: var(--color-surface);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 5%);
+  line-height: 1.7;
+}
+
+.answerParagraph { margin: 0 0 12px; }
+.answerParagraph:last-child { margin-bottom: 0; }
+.answerItem { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+.answerItem:last-child { border-bottom: 0; padding-bottom: 0; }
+.answerItem span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--color-action); color: var(--color-on-action); font-size: .78rem; font-weight: 700; }
+.answerItem p { margin: 0; }
 
 .translation {
   margin-top: 24px;
@@ -274,13 +291,19 @@
 
 .composerWrap {
   position: fixed;
-  inset: auto 0 0;
+  left: var(--sidebar-offset, 0px);
+  right: 0;
+  bottom: 0;
   padding: 16px 20px max(16px, env(safe-area-inset-bottom));
   background: linear-gradient(to top, var(--color-canvas) 72%, transparent);
 }
 
+@media (max-width: 760px) {
+  .composerWrap { left: 0; }
+}
+
 .composer {
-  width: min(100%, 680px);
+  width: min(100%, 920px);
   min-height: 58px;
   margin: 0 auto;
   display: grid;
@@ -330,14 +353,14 @@
 }
 
 .attachmentStatus {
-  width: min(100%, 680px);
+  width: min(100%, 920px);
   margin: 8px auto 0;
   color: var(--color-muted);
   font-size: 0.85rem;
 }
 
 .speechStatus {
-  width: min(100%, 680px);
+  width: min(100%, 920px);
   margin: 8px auto 0;
   color: var(--color-muted);
   font-size: .85rem;
@@ -430,7 +453,7 @@
 }
 
 .error {
-  width: min(100%, 680px);
+  width: min(100%, 920px);
   margin: 8px auto 0;
   color: var(--color-error);
   font-size: 0.9rem;
@@ -454,3 +477,9 @@
 .citation[open] > div { position: absolute; z-index: 4; left: 0; top: calc(100% + 6px); min-width: 190px; display: grid; gap: 6px; padding: 12px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 12px 32px rgb(15 23 42 / 14%); color: var(--color-muted); }
 .citation strong { color: var(--color-error); }
 .citation a { color: var(--color-text); font-weight: 650; }
+
+@media (max-width: 760px) {
+  .header { padding: 10px 16px; }
+  .conversation { padding: 32px 20px 150px; }
+  .intro { margin-top: 6vh; }
+}

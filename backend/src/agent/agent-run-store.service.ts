@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 
 @Injectable()
-export class AgentRunService {
+export class AgentRunStoreService {
   constructor(private readonly prisma: PrismaService) {}
 
   start(input: { id: string; conversationId: string; jobId: string; model?: string }): Promise<unknown> {

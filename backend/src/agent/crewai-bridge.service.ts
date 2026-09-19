@@ -1,5 +1,5 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
-import { AgentRunService } from "./agent-run.service.js";
+import { AgentRunStoreService } from "./agent-run-store.service.js";
 
 type AgentRunRequest = {
   runId: string;
@@ -15,8 +15,8 @@ type AgentRunRequest = {
 };
 
 @Injectable()
-export class CrewAiClientService {
-  constructor(private readonly runs: AgentRunService) {}
+export class CrewAiBridgeService {
+  constructor(private readonly runs: AgentRunStoreService) {}
   async run(request: AgentRunRequest): Promise<unknown> {
     const baseUrl = process.env.CREWAI_AGENT_URL ?? "http://127.0.0.1:8010";
     await this.runs.start({ id: request.runId, conversationId: request.conversationId, jobId: request.jobId, model: process.env.CREWAI_MODEL_NAME });

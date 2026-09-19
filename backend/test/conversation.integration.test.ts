@@ -25,7 +25,7 @@ describe("conversation persistence", () => {
   let app: NestFastifyApplication;
   let prisma: PrismaService;
   let baseUrl: string;
-  async function createConversation(mode: "TRAVEL" | "TRANSLATION"): Promise<{ conversation: { id: string; mode: "TRAVEL" | "TRANSLATION"; createdAt: string }; cookie: string | undefined }> {
+  async function createConversation(mode: "UNIFIED" | "TRAVEL" | "TRANSLATION"): Promise<{ conversation: { id: string; mode: "UNIFIED" | "TRAVEL" | "TRANSLATION"; createdAt: string }; cookie: string | undefined }> {
     const response = await app.inject({ method: "POST", url: "/api/v1/conversations", payload: { mode } });
     const cookie = response.headers["set-cookie"];
     return { conversation: ConversationSchema.parse(response.json()), cookie: Array.isArray(cookie) ? cookie[0] : cookie };

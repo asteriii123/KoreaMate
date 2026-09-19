@@ -21,13 +21,17 @@ export function resolveApiUrl(path: string): string {
 }
 
 async function requestJson<T>(path: string, init: RequestInit, parse: (value: unknown) => T): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...init.headers },
+    headers,
   });
   if (!response.ok) {
-    throw new Error("暂时无法连接 KoreaMate，请稍后再试。");
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    const detail = typeof payload?.message === "string" ? payload.message : `HTTP ${response.status}`;
+    throw new Error(detail);
   }
   return parse(await response.json());
 }

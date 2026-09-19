@@ -88,7 +88,7 @@ def warm_up():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=58010, type=int)
+    parser.add_argument("--port", default=45010, type=int)
     args = parser.parse_args()
     warm_up()
     mcp.run(transport="http", host=args.host, port=args.port)

@@ -3,7 +3,8 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { TravelService } from "../plan/plan.service.js";
 import { TranslationService } from "../translate/translate.service.js";
-import { CrewAiClientService } from "../agent/crewai-client.service.js";
+import { CrewAiBridgeService } from "./crewai-bridge.service.js";
+import { StreamingLlmService } from "./streaming-llm.service.js";
 import { CONVERSATION_INTENT_PROVIDER, type ConversationContext, type ConversationIntentProvider } from "./intent-provider.js";
 
 type Job = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[]; assetIds?: string[] };
@@ -12,7 +13,7 @@ type Job = { jobId: string; conversationId: string; sourceMessageId: string; tex
 export class ConversationService {
   private readonly logger = new Logger(ConversationService.name);
 
-  constructor(private readonly prisma: PrismaService, @Inject(CONVERSATION_INTENT_PROVIDER) private readonly intents: ConversationIntentProvider, private readonly travel: TravelService, private readonly translation: TranslationService, private readonly crewAi: CrewAiClientService) {}
+  constructor(private readonly prisma: PrismaService, @Inject(CONVERSATION_INTENT_PROVIDER) private readonly intents: ConversationIntentProvider, private readonly travel: TravelService, private readonly translation: TranslationService, private readonly crewAi: CrewAiBridgeService, private readonly llm: StreamingLlmService) {}
 
   async process(job: Job): Promise<void> {
     try {
@@ -70,18 +71,58 @@ export class ConversationService {
         await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: reply } as Prisma.InputJsonValue } });
         await this.event(job.jobId, result.status === "question" ? "agent.question" : "agent.confirmation.required", { reply, pendingAction: result.pending_action ?? null });
       } else {
-        const reply = result.reply ?? "已完成处理。";
-        await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: reply } as Prisma.InputJsonValue } });
-        for (let offset = 0; offset < reply.length; offset += 24) {
-          await this.event(job.jobId, "agent.reply.delta", { delta: reply.slice(offset, offset + 24) });
-          await new Promise((resolve) => setTimeout(resolve, 25));
+        // CrewAI may answer with a useful text draft before it has produced a
+        // contract-shaped TripPlan. For explicit itinerary requests, hand the
+        // same job to the domain planner so the UI receives travel.plan.ready
+        // and renders the designed itinerary cards instead of raw Markdown.
+        if (this.isItineraryRequest(job.text)) {
+          await this.event(job.jobId, "conversation.executing", { message: "正在生成行程卡片…" });
+          await this.travel.process(job);
+          return;
         }
+        const fallbackReply = result.reply ?? "已完成处理。";
+        const reply = await this.streamFinalReply(job.jobId, fallbackReply);
+        await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: reply } as Prisma.InputJsonValue } });
         await this.event(job.jobId, "agent.result.ready", { reply });
       }
       await this.finish(job.jobId);
     } catch (error) {
       this.logger.error(`CrewAI job ${job.jobId} failed`, error instanceof Error ? error.stack : String(error));
       await this.fail(job.jobId);
+    }
+  }
+
+  private isItineraryRequest(text: string): boolean {
+    return /(规划|安排|行程|路线|怎么玩|几天|第\s*[一二三四五六七八九十0-9]+天|预算|旅行计划)/u.test(text)
+      && /(首尔|釜山|济州|济州岛|仁川|大邱|庆州|韩国)/u.test(text);
+  }
+
+  private async streamFinalReply(jobId: string, fallbackReply: string): Promise<string> {
+    try {
+      const stream = this.llm.streamReply({
+        system: "你是 KoreaMate 旅行助手。请根据下面的处理结果，用简洁自然的中文向用户输出最终回复。直接输出回复正文，不要加前缀，不要解释，不要复述指令。",
+        user: `处理结果：\n${fallbackReply}`,
+      });
+      let full = "";
+      let buffer = "";
+      let lastFlush = Date.now();
+      for await (const chunk of stream) {
+        full += chunk;
+        buffer += chunk;
+        const now = Date.now();
+        if (buffer && (now - lastFlush >= 80 || buffer.length >= 32)) {
+          await this.event(jobId, "agent.reply.delta", { delta: buffer });
+          buffer = "";
+          lastFlush = now;
+        }
+      }
+      if (buffer) await this.event(jobId, "agent.reply.delta", { delta: buffer });
+      const reply = full.trim();
+      return reply || fallbackReply;
+    } catch (error) {
+      this.logger.warn(`流式回复失败，回退为整段输出：${error instanceof Error ? error.message : String(error)}`);
+      await this.event(jobId, "agent.reply.delta", { delta: fallbackReply });
+      return fallbackReply;
     }
   }
 

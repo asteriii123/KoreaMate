@@ -56,7 +56,7 @@ export class ImageAssetsService {
   async descriptor(id: string): Promise<{ id: string; status: "uploaded" | "processing" | "ready" | "text_only" | "failed"; originalUrl: string; translatedUrl: string | null; width: number; height: number }> {
     const asset = await this.prisma.imageAsset.findUniqueOrThrow({ where: { id } });
     const status = asset.status.toLowerCase() as "uploaded" | "processing" | "ready" | "text_only" | "failed";
-    return { id, status, originalUrl: `/api/v1/image/${id}/original`, translatedUrl: asset.translatedKey ? `/api/v1/image/${id}/translated` : null, width: asset.width, height: asset.height };
+    return { id, status, originalUrl: `/api/v1/image-assets/${id}/original`, translatedUrl: asset.translatedKey ? `/api/v1/image-assets/${id}/translated` : null, width: asset.width, height: asset.height };
   }
 
   async resolveForOwner(id: string, variant: "original" | "translated", identity: Identity): Promise<{ key: string; mimeType: string; signedUrl: string | null }> {

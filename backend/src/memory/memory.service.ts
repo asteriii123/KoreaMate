@@ -39,8 +39,7 @@ export class MemoryService {
   }
 
   async remove(identity: Identity, id: string): Promise<void> {
-    const result = await this.prisma.userMemory.deleteMany({ where: { id, ...this.owner(identity) } });
-    if (result.count === 0) throw new NotFoundException("Memory not found");
+    await this.prisma.userMemory.deleteMany({ where: { id, ...this.owner(identity) } });
   }
 
   private normalize(kind: MemoryKind, value: string): string {

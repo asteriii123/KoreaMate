@@ -69,10 +69,7 @@ export class TravelService {
       if (await this.handleSavedPlaceIntent(job, previous?.id ?? null)) return;
       const memoryCandidates = await this.memoryExtractor.extract(job.text).catch(() => []);
       if (memoryCandidates.length > 0) {
-        await this.memories.upsertCandidates(identity, memoryCandidates, job.sourceMessageId).then(async (saved) => {
-          const summary = saved.map((item) => this.memoryLabel(item.kind, item.value)).join("、");
-          await this.appendEvent(job.jobId, "travel.memory.updated", { action: "saved", summary });
-        }).catch(() => undefined);
+        await this.memories.upsertCandidates(identity, memoryCandidates, job.sourceMessageId).catch(() => undefined);
       }
       const memory = await this.memoryContext(identity).catch(() => this.emptyMemory());
       if (previous && this.isConfirmation(job.text)) {

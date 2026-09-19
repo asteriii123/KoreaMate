@@ -140,7 +140,7 @@ type DomainToolRequest<TInput> = {
 
 ## 10. 迁移阶段
 
-1. 创建 `agent/crewai-service/`，建立 Flow、Agent、Task、Tool、checkpoint 和 HTTP/MCP 入口。
+1. 创建 `backend/crewai-service/`，建立 Flow、Agent、Task、Tool、checkpoint 和 HTTP/MCP 入口。
 2. 将天气、地点、航班、酒店、知识检索、翻译、OCR、攻略、收藏和记忆包装成 CrewAI Tools。
 3. 将行程创建/修改包装成写工具，加入确认、版本和幂等保护。
 4. 让 NestJS 统一入口调用 CrewAI Flow，旧服务仅作为领域工具实现。

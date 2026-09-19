@@ -14,7 +14,7 @@ async function bootstrap(): Promise<void> {
   await app.register(multipart, { limits: { files: 1, fileSize: 10 * 1024 * 1024 } });
   app.setGlobalPrefix("api/v1");
   const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000,http://localhost:3001").split(",");
-  app.enableCors({ origin: allowedOrigins, credentials: true });
+  app.enableCors({ origin: allowedOrigins, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] });
   await app.listen(Number(process.env.PORT ?? 3100));
 }
 

@@ -21,7 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   function toggle(): void { const next = !collapsed; setCollapsed(next); localStorage.setItem("koreamate-sidebar", next ? "collapsed" : "expanded"); }
   const closeMobile = () => setMobileOpen(false);
   function openAccount(): void { setAccountOpen(true); setAccountError(""); setMemories(null); void listMemories().then((value) => setMemories(value.items)).catch(() => { setMemories([]); setAccountError("偏好暂时无法加载，请稍后重试。"); }); }
-  async function removeMemory(item: UserMemory): Promise<void> { setMemories((current) => current?.filter((value) => value.id !== item.id) ?? []); try { await deleteMemory(item.id); } catch { setMemories((current) => [item, ...(current ?? [])]); setAccountError("删除失败，请重试。"); } }
+  async function removeMemory(item: UserMemory): Promise<void> { setMemories((current) => current?.filter((value) => value.id !== item.id) ?? []); try { await deleteMemory(item.id); } catch (error) { setMemories((current) => [item, ...(current ?? [])]); setAccountError(`删除失败：${error instanceof Error ? error.message : "请求未完成"}`); } }
 
   return <div className={`${styles.shell} ${collapsed ? styles.isCollapsed : ""}`}>
     <button className={styles.mobileMenu} type="button" onClick={() => setMobileOpen(true)} aria-label="打开菜单">☰</button>
@@ -29,6 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <aside className={`${styles.sidebar} ${mobileOpen ? styles.mobileOpen : ""}`} aria-label="主导航">
       <div className={styles.brandRow}><Link href="/" onClick={closeMobile}><span className={styles.logo}>K</span><span className={styles.label}>KoreaMate</span></Link><button type="button" onClick={toggle} className={styles.collapse} aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}>‹</button></div>
       <nav className={styles.nav}>
+        <Link className={pathname === "/travel" ? styles.active : ""} href="/travel" onClick={closeMobile}><span aria-hidden="true">✦</span><span className={styles.label}>规划旅行</span></Link>
         <Link className={pathname === "/depart" ? styles.active : ""} href="/depart" onClick={closeMobile}><span aria-hidden="true">↗</span><span className={styles.label}>开始出发吧</span></Link>
         <Link className={pathname === "/history" ? styles.active : ""} href="/history" onClick={closeMobile}><span aria-hidden="true">◷</span><span className={styles.label}>历史记录</span></Link>
         <Link className={pathname === "/saved" ? styles.active : ""} href="/saved" onClick={closeMobile}><span aria-hidden="true">♡</span><span className={styles.label}>我的收藏</span></Link>
@@ -37,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     </aside>
     <div className={styles.content}>{children}</div>
     {loginOpen ? <LoginDialog onClose={() => setLoginOpen(false)} onLogin={(value) => { setUser(value); setLoginOpen(false); window.dispatchEvent(new Event("koreamate-auth-changed")); }} /> : null}
-    {accountOpen ? <AccountDialog user={user} memories={memories} error={accountError} onClose={() => setAccountOpen(false)} onLogin={() => { setAccountOpen(false); setLoginOpen(true); }} onDelete={(item) => void removeMemory(item)} onLogout={() => void logout().then(() => { setUser(null); setAccountOpen(false); window.dispatchEvent(new Event("koreamate-auth-changed")); })} /> : null}
+    {accountOpen ? <AccountDialog user={user} memories={memories} error={accountError} onClose={() => setAccountOpen(false)} onLogin={() => { setAccountOpen(false); setLoginOpen(true); }} onDelete={(item) => void removeMemory(item)} onLogout={() => void logout().then(() => { setUser(null); setMemories(null); setAccountOpen(false); window.dispatchEvent(new Event("koreamate-auth-changed")); }).catch(() => setAccountError("退出登录失败，请重试。"))} /> : null}
   </div>;
 }
 

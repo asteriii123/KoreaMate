@@ -11,6 +11,7 @@ import { TranslationService } from "../translate/translate.service.js";
 import { TravelService } from "../plan/plan.service.js";
 import type { Identity } from "../auth/identity.service.js";
 import { ImageAssetsService } from "../image/image.service.js";
+import { ConversationService } from "../agent/conversation.service.js";
 
 @Injectable()
 export class ConversationsService {
@@ -19,6 +20,7 @@ export class ConversationsService {
     private readonly translation: TranslationService,
     private readonly travel: TravelService,
     private readonly imageAssets: ImageAssetsService,
+    private readonly conversation: ConversationService,
   ) {}
 
   async create(mode: ConversationMode, identity: Identity = { userId: null, guestId: null }): Promise<Conversation> {
@@ -112,7 +114,27 @@ export class ConversationsService {
         }
       }
 
-      if (conversation.mode === "TRANSLATION") {
+      if (request.content.type === "IMAGE_TRANSLATION") {
+        void this.translation.process({
+          jobId: result.job.id,
+          conversationId,
+          sourceMessageId: result.message.id,
+          text: request.content.text,
+          assetIds,
+        });
+        return { messageId: result.message.id, jobId: result.job.id, status: "ACCEPTED" };
+      }
+
+      if (conversation.mode === "UNIFIED") {
+        void this.conversation.process({
+          jobId: result.job.id,
+          conversationId,
+          sourceMessageId: result.message.id,
+          text: request.content.text,
+          images: request.content.type === "IMPORT" ? request.content.images : [],
+          assetIds,
+        });
+      } else if (conversation.mode === "TRANSLATION") {
         void this.translation.process({
           jobId: result.job.id,
           conversationId,

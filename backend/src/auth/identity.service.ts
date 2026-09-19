@@ -96,7 +96,7 @@ export class IdentityService {
   }
 
   private clearCookie(reply: FastifyReply, name: string): void {
-    this.appendCookie(reply, `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+    this.appendCookie(reply, `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`);
   }
 
   private appendCookie(reply: FastifyReply, cookie: string): void {

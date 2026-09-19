@@ -1,6 +1,6 @@
 import { Body, Controller, Headers, Post } from "@nestjs/common";
 import { PlacesService } from "../place/place.service.js";
-import { CrewAiClientService } from "./crewai-client.service.js";
+import { CrewAiBridgeService } from "./crewai-bridge.service.js";
 import { OpenMeteoWeatherProvider } from "../plan/weather.js";
 import { FlightMcpProvider } from "../plan/flights.js";
 import { HotelMcpProvider } from "../plan/hotels.js";
@@ -13,8 +13,8 @@ import { TranslationService } from "../translate/translate.service.js";
 type ToolPayload = { query?: string; provider?: string; [key: string]: unknown };
 
 @Controller("internal/agent-tools")
-export class AgentToolController {
-  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiClientService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider, private readonly saved: SavedPlacesService, private readonly memories: MemoryService, private readonly travel: TravelService, private readonly translation: TranslationService) {}
+export class AgentToolsController {
+  constructor(private readonly places: PlacesService, private readonly crewAi: CrewAiBridgeService, private readonly weather: OpenMeteoWeatherProvider, private readonly flights: FlightMcpProvider, private readonly hotels: HotelMcpProvider, private readonly saved: SavedPlacesService, private readonly memories: MemoryService, private readonly travel: TravelService, private readonly translation: TranslationService) {}
 
   @Post("create-trip-plan")
   async createTripPlan(@Body() body: ToolPayload, @Headers("x-agent-service-key") key?: string): Promise<{ accepted: true; jobId: string }> {

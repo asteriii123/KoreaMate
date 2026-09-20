@@ -122,63 +122,67 @@ NestJS / Fastify API
 
 ### Agent 调用流程
 
-下面的流程图展示一次用户请求如何经过 Agent 工作流。Agent 只负责理解、路由和生成结构化结果；数据、权限、事务和版本始终由 NestJS 领域服务控制。
+下面将 Agent 工作流拆成四张图，分别展示统一入口、旅行规划、翻译处理，以及记忆/攻略与结果回传。Agent 只负责理解、路由和生成结构化结果；数据、权限、事务和版本始终由 NestJS 领域服务控制。
 
 ```mermaid
 flowchart TD
-    A[用户发送消息] --> B[ConversationService<br/>读取会话与身份]
-    B --> C{Intent Router<br/>判断意图与动作}
-
-    C -->|travel| D[旅行规划工作流]
-    C -->|translation| E[翻译工作流]
-    C -->|memory| F[记忆提取工作流]
-    C -->|guide| G[攻略地点提取工作流]
-    C -->|无法识别| H[规则降级 Intent Fallback]
-    H --> C
-
-    D --> D1{需求是否完整}
-    D1 -->|否| D2[只追问一个关键问题]
-    D1 -->|是| D3[查询真实地点与旅行上下文]
-    D3 --> D4[生成逐日行程]
-    D4 --> D5[创建新的 TripVersion]
-
-    E --> E1{输入类型}
-    E1 -->|文字| E2[LLM 中韩翻译]
-    E1 -->|语音| E3[faster-whisper 转写]
-    E1 -->|图片| E4[PaddleOCR 识别韩文与坐标]
-    E4 --> E5[LLM 翻译 + Sharp 原图覆盖]
-    E2 --> I
-    E3 --> E2
-    E5 --> I
-
-    F --> F1[提取五类长期偏好]
-    F1 --> F2[规则与置信度校验]
-    F2 --> F3[只填充缺失字段]
-
-    G --> G1[提取景点、餐厅与酒店]
-    G1 --> G2[Kakao / 韩国旅游数据核验]
-    G2 --> G3[输出已核验与待确认地点]
-
-    D3 -.领域查询.-> T[NestJS Agent 工具网关]
-    D5 -.领域写入.-> T
-    F3 -.记忆管理.-> T
-    G2 -.地点核验.-> T
-    T --> P[Provider 与领域服务<br/>地点 / 天气 / 汇率 / 航班 / 酒店 / 数据库]
-
-    D2 --> I[结构化结果与错误处理]
-    F3 --> I
-    G3 --> I
-    P --> I
-    I --> V[Zod Schema 校验]
-    V --> S[保存 JobEvent / 会话 / 行程版本]
-    S --> O[SSE 推送进度与结果]
-    O --> U[前端展示]
-
-    X[Agent 禁止直接访问数据库] -.安全边界.-> T
-    X -.-> V
+    A[用户消息] --> B[ConversationService]
+    B --> C{Intent Router}
+    C -->|travel| D[旅行规划]
+    C -->|translation| E[翻译处理]
+    C -->|memory / guide| F[记忆与攻略]
+    C -->|无法识别| G[Intent Fallback]
+    G --> C
 ```
 
-面试时可以概括为：**NestJS 决定流程和权限，LLM 负责自然语言任务，Provider 提供真实数据，Zod 负责结果校验，SSE 负责把持久化进度推给前端。**
+#### 旅行规划工作流
+
+```mermaid
+flowchart LR
+    A[旅行需求] --> B{需求是否完整}
+    B -->|否| C[只追问一个关键问题]
+    B -->|是| D[查询真实地点与旅行上下文]
+    D --> E[生成逐日行程]
+    E --> F[创建新的 TripVersion]
+    D -.地点 / 天气 / 汇率 / 航班 / 酒店.-> G[NestJS 领域服务与 Provider]
+    F --> H[结构化结果]
+    C --> H
+```
+
+#### 翻译与图片处理工作流
+
+```mermaid
+flowchart LR
+    A[翻译请求] --> B{输入类型}
+    B -->|文字| C[LLM 中韩翻译]
+    B -->|语音| D[faster-whisper 转写]
+    D --> C
+    B -->|图片| E[PaddleOCR 识别韩文与坐标]
+    E --> F[LLM 翻译]
+    F --> G[Sharp 原图覆盖]
+    C --> H[翻译结果]
+    G --> H
+```
+
+#### 记忆、攻略与结果回传
+
+```mermaid
+flowchart LR
+    A[对话 / 攻略内容] --> B{处理类型}
+    B -->|记忆| C[提取五类长期偏好]
+    C --> D[规则与置信度校验]
+    D --> E[只填充缺失字段]
+    B -->|攻略| F[提取景点、餐厅与酒店]
+    F --> G[Kakao / 韩国旅游数据核验]
+    G --> H[已核验 / 待确认地点]
+    E --> I[Zod Schema 校验]
+    H --> I
+    I --> J[保存 JobEvent / 会话 / 行程版本]
+    J --> K[SSE 推送进度与结果]
+    K --> L[前端展示]
+    M[Agent 不直接访问数据库] -.-> N[NestJS Agent 工具网关]
+    N -.-> I
+```
 
 ### 技术栈
 

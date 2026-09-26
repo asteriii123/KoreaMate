@@ -1,14 +1,24 @@
 {
   "name": "koreamate-workspace",
   "private": true,
-  "version": "0.1.0",
+  "version": "3.0.0",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared/*"
+  ],
   "scripts": {
-    "dev": "concurrently -n frontend,backend -c cyan,magenta \"npm:dev:frontend\" \"npm:dev:backend\"",
-    "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run start:dev",
-    "build": "npm --prefix backend run build && npm --prefix frontend run build",
-    "test": "npm --prefix backend test && npm --prefix frontend test",
-    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint"
+    "dev": "concurrently -n web,api,crewai -c cyan,magenta,red \"npm run dev -w @koreamate/web -- -p 3001\" \"npm run dev -w @koreamate/api\" \"npm run dev:crewai\"",
+    "dev:ocr": ".venv-ocr\\Scripts\\python.exe infrastructure\\paddleocr\\server.py",
+    "dev:whisper": ".venv-whisper\\Scripts\\python.exe infrastructure\\whisper\\server.py",
+    "dev:embedding": ".venv-embedding\\Scripts\\python.exe infrastructure\\embedding\\server.py",
+    "dev:crewai": "cd backend\\crewai-service && .venv\\Scripts\\python.exe -m app.api.server",
+    "dev:all": "concurrently -n web,api,crewai,ocr,whisper,embedding -c cyan,magenta,red,yellow,green,blue \"npm run dev -w @koreamate/web -- -p 3001\" \"npm run dev -w @koreamate/api\" \"npm run dev:crewai\" \"npm run dev:ocr\" \"npm run dev:whisper\" \"npm run dev:embedding\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration -w @koreamate/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

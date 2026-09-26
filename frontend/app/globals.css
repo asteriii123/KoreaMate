@@ -1,0 +1,53 @@
+:root {
+  color-scheme: light;
+
+  /* 清新海岛 · 覆盖 animal-island-ui 默认主色（草木绿 CTA） */
+  --animal-primary-color: #6fba2c;
+  --animal-primary-color-hover: #85cc45;
+  --animal-primary-color-active: #5a9e1e;
+  --animal-primary-color-bg: #eef7e6;
+
+  /* 语义别名（应用页通用） */
+  --color-canvas: var(--animal-bg-color);
+  --color-surface: var(--animal-bg-color-secondary);
+  --color-text: var(--animal-text-color);
+  --color-muted: var(--animal-text-color-secondary);
+  --color-border: var(--animal-border-color);
+  --color-action: var(--animal-primary-color);
+  --color-on-action: #ffffff;
+  --color-error: var(--animal-error-color);
+  --color-focus: var(--animal-warning-color);
+
+  /* 清新海岛专用 */
+  --km-sky: #5bb9e6;
+  --km-sky-deep: #3f9fd8;
+  --km-sky-soft: #dff0fb;
+  --km-grass: #6fba2c;
+  --km-wood: #794f27;
+  --km-cream: #f8f8f0;
+  --km-sun: #f5c31c;
+
+  font-family: var(--animal-font-family);
+  background: var(--animal-bg-color);
+  color: var(--animal-text-color);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+a,
+input,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}

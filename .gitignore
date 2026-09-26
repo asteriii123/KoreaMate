@@ -1,8 +1,17 @@
 # Dependencies
 node_modules/
+.venv-ocr/
+.venv-whisper/
+.venv-embedding/
+.data-image-assets/
+.logs/
+.modelscope-cache/
+__pycache__/
+*.pyc
 
 # Builds and test artifacts
 dist/
+.next/
 test-results/
 playwright-report/
 coverage/
@@ -20,14 +29,9 @@ Thumbs.db
 # Codex verification artifacts
 .codex-*.png
 .artifacts/
-frontend/node_modules/
-frontend/dist/
-frontend/test-results/
-backend/node_modules/
-backend/dist/
-backend/coverage/
-node_modules/
-*.tsbuildinfo
-.env
-.vite/
-cookies/
+
+# Local tooling
+.superpowers/
+
+# Local temp
+/tmp-cookie.txt

@@ -36,15 +36,21 @@ KoreaMate 3.0 不是把所有权力交给一个自治 Agent。系统由 NestJS �
 
 ---
 
-## 🖼️ 项目图集
+## 🖼️ 产品截图
 
-从一句话开始，到真实地点、可控记忆和图片内翻译，六个画面概括 KoreaMate 3.0 的完整体验：
+动物森友会风格的清新界面，两个一级入口：**AI 旅行规划** 与 **中韩翻译**。
 
-<p align="center">
-  <img src="docs/readme-gallery.svg" alt="KoreaMate 3.0 六宫格产品图集：一句话规划、受控工作流、真实地点与行程、记忆由你掌控、图片内翻译、欢迎参与贡献" width="1100" />
-</p>
+| 出发页 | AI 旅行规划 | 中韩翻译 |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/landing.png" width="330" alt="出发页"> | <img src="docs/screenshots/travel.png" width="330" alt="AI 旅行规划"> | <img src="docs/screenshots/translate.png" width="330" alt="中韩翻译"> |
+| 一句话，说走就走 | 从模糊念头到逐日行程 | 文字 · 语音 · 图片都能翻 |
 
-> 这是仓库内可维护的产品信息图，不依赖外部图片链接；功能名称与数据边界以当前代码为准。
+| 历史记录 | 我的收藏 | 开始出发吧 |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/history.png" width="330" alt="历史记录"> | <img src="docs/screenshots/saved.png" width="330" alt="我的收藏"> | <img src="docs/screenshots/depart.png" width="330" alt="开始出发吧"> |
+| 规划与翻译都在这里 | 把想去的地方留住 | 按当天顺序直接出发 |
+
+> 截图由仓库内 `docs/screenshots/` 维护，与本地运行界面一致；重新截图后同名覆盖即可。
 
 ---
 

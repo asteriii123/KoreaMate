@@ -1,8 +1,7 @@
 import { ConversationScreen } from "../../components/conversation/conversation-screen";
-import { redirect } from "next/navigation";
+
 
 export default function TranslatePage() {
-  redirect("/");
   return (
     <ConversationScreen
       mode="TRANSLATION"
@@ -13,3 +12,4 @@ export default function TranslatePage() {
     />
   );
 }
+

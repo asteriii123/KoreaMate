@@ -24,7 +24,7 @@ export class ConversationsService {
   ) {}
 
   async create(mode: ConversationMode, identity: Identity = { userId: null, guestId: null }): Promise<Conversation> {
-    const conversation = await this.prisma.conversation.create({ data: { mode, userId: identity.userId, guestId: identity.guestId } });
+    const conversation = await this.prisma.conversation.create({ data: { mode, userId: identity.userId, guestId: identity.userId ? null : identity.guestId } });
     return {
       id: conversation.id,
       mode: conversation.mode,
@@ -175,9 +175,11 @@ export class ConversationsService {
   }
 
   private ownerWhere(identity: Identity): Prisma.ConversationWhereInput {
-    if (identity.userId) return { userId: identity.userId };
-    if (identity.guestId) return { guestId: identity.guestId };
-    return { id: "00000000-0000-0000-0000-000000000000" };
+    const owners: Prisma.ConversationWhereInput[] = [];
+    if (identity.userId) owners.push({ userId: identity.userId });
+    if (identity.guestId) owners.push({ guestId: identity.guestId });
+    if (owners.length === 0) return { id: "00000000-0000-0000-0000-000000000000" };
+    return owners.length === 1 ? owners[0]! : { OR: owners };
   }
 
   private messageTitle(content: Prisma.JsonValue | undefined): string | null {

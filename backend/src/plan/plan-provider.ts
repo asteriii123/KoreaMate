@@ -11,6 +11,11 @@ export const TripRequirementsSchema = z.object({
   travelers: z.number().int().min(1).max(20).nullable(),
   budget: z.number().positive().nullable(),
   currency: z.string().length(3).default("CNY"),
+  budgetScope: z.enum(["all_inclusive", "activities_only"]).nullable().optional(),
+  flightBudget: z.number().positive().nullable().optional(),
+  hotelBudget: z.number().positive().nullable().optional(),
+  flightPreferences: z.array(z.string().trim().min(1)).max(8).nullable().optional(),
+  hotelPreferences: z.array(z.string().trim().min(1)).max(8).nullable().optional(),
   interests: z.array(z.string().trim().min(1)).max(8),
   pace: z.enum(["relaxed", "balanced", "packed"]).nullable(),
   constraints: z.array(z.string().trim().min(1)).max(12),
@@ -48,7 +53,7 @@ export const TravelProviderResultSchema = z.discriminatedUnion("kind", [
 
 export type TripRequirements = z.infer<typeof TripRequirementsSchema>;
 export type TravelProviderResult = z.infer<typeof TravelProviderResultSchema>;
-export const PendingFieldSchema = z.enum(["destination", "startDate", "days", "travelers", "budget"]);
+export const PendingFieldSchema = z.enum(["destination", "departureCity", "startDate", "days", "travelers", "budget", "budgetScope", "flightBudget", "hotelBudget"]);
 export type PendingField = z.infer<typeof PendingFieldSchema>;
 export type TravelMemoryContext = { departureCity: string | null; budgetLevel: "economy" | "balanced" | "comfortable" | null; pace: "relaxed" | "balanced" | "packed" | null; interests: string[]; constraints: string[] };
 

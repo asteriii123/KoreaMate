@@ -11,16 +11,19 @@ export class IdentityService {
 
   async resolve(request: FastifyRequest, reply?: FastifyReply): Promise<Identity> {
     const cookies = this.cookies(request.headers.cookie);
+    let userId: string | null = null;
     const sessionToken = cookies.koreamate_session;
     if (sessionToken) {
       const session = await this.prisma.session.findUnique({ where: { tokenHash: this.hash(sessionToken) } });
-      if (session && session.expiresAt > new Date()) return { userId: session.userId, guestId: null };
+      if (session && session.expiresAt > new Date()) userId = session.userId;
     }
+    let guestId: string | null = null;
     const guestToken = cookies.koreamate_guest;
     if (guestToken) {
       const guest = await this.prisma.guestIdentity.findUnique({ where: { tokenHash: this.hash(guestToken) } });
-      if (guest && !guest.mergedAt) return { userId: null, guestId: guest.id };
+      if (guest && !guest.mergedAt) guestId = guest.id;
     }
+    if (userId || guestId) return { userId, guestId };
     if (!reply) return { userId: null, guestId: null };
     const token = randomBytes(32).toString("base64url");
     const guest = await this.prisma.guestIdentity.create({ data: { tokenHash: this.hash(token) } });

@@ -41,8 +41,8 @@ docs/                设计与 API 文档
 ```bash
 npm install                                              # 安装依赖（npm workspaces）
 docker compose -f infrastructure/docker-compose.yml up -d postgres   # 启动数据库
-npm run dev                                              # 启动 web + api
-npm run dev:all                                          # 启动 web + api + ocr + whisper + embedding
+npm run dev                                              # 启动 web + api + crewai
+npm run dev:all                                          # 启动 web + api + crewai + ocr + whisper + embedding
 npm run typecheck && npm run lint && npm test            # 质量检查
 npm run test:integration -w @koreamate/api               # 集成测试（需真实 PostgreSQL）
 ```

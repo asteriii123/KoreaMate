@@ -20,6 +20,7 @@ import {
   type Citation,
 } from "@koreamate/contracts";
 import Link from "next/link";
+import { Button, Tag } from "animal-island-ui";
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { confirmTrip, createConversation, deleteSavedPlace, getConversation, jobEventsUrl, listSavedPlaces, savePlace, sendImageTranslationMessage, sendImportMessage, sendTextMessage, transcribeSpeech } from "../../lib/api";
 import { ImageTranslationCard } from "./image-translation-card";
@@ -62,6 +63,16 @@ export function shouldSubmitOnEnter(key: string, shiftKey: boolean, isComposing:
 
 export function isGuideImport(text: string, imageCount: number): boolean {
   return imageCount > 0 || /https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.(?:cn|com))\//iu.test(text);
+}
+
+function currencyLabel(code: string): string {
+  switch (code.toUpperCase()) {
+    case "CNY": return "元";
+    case "KRW": return "韩元";
+    case "USD": return "美元";
+    case "JPY": return "日元";
+    default: return code;
+  }
 }
 
 function weatherText(plan: TripPlan): string | null {
@@ -411,12 +422,14 @@ export function ConversationScreen({
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <Link className={styles.back} href="/" aria-label="返回首页">
-          <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
-        <p className={styles.title}>{title}</p>
+        <div className={styles.headerInner}>
+          <Link className={styles.back} href="/" aria-label="返回首页">
+            <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+          <p className={styles.title}>{title}</p>
+        </div>
       </header>
 
       <section className={styles.conversation} aria-live="polite" aria-busy={busy}>
@@ -441,10 +454,9 @@ export function ConversationScreen({
               <p className={styles.translationDetail}>发音提示：{translation.pronunciation}</p>
             ) : null}
             {translation.targetLanguage === "ko" && canSpeak ? (
-              <button className={styles.speakAction} type="button" onClick={() => toggleSpeaking(item.id, translation.naturalExpression)} aria-label={speakingId === item.id ? "停止朗读韩语" : "朗读韩语"}>
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5zM15 9a4 4 0 010 6M18 6a8 8 0 010 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <Button type="default" size="small" icon={<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5zM15 9a4 4 0 010 6M18 6a8 8 0 010 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>} onClick={() => toggleSpeaking(item.id, translation.naturalExpression)} aria-label={speakingId === item.id ? "停止朗读韩语" : "朗读韩语"}>
                 {speakingId === item.id ? "停止朗读" : "朗读韩语"}
-              </button>
+              </Button>
             ) : null}
           </article>;
           }
@@ -469,23 +481,24 @@ export function ConversationScreen({
                     {value.place?.name && value.place.name !== value.name ? <small>{value.place.name}</small> : null}
                   </span>
                 </label>
-                <small>{value.verified ? "已核验" : "待确认"}</small>
+                <Tag size="small" variant={value.verified ? "solid" : "outlined"} color={value.verified ? "app-green" : "default"}>{value.verified ? "已核验" : "待确认"}</Tag>
               </li>)}</ul>
-              {preview.items.length > 8 ? <button className={styles.importMore} type="button" aria-expanded={Boolean(expandedImports[preview.id])} onClick={() => setExpandedImports((current) => ({ ...current, [preview.id]: !current[preview.id] }))}>{expandedImports[preview.id] ? "收起" : `查看全部 ${preview.items.length} 个地点`}</button> : null}
-              <button className={styles.importAction} type="button" disabled={busy || selected.length === 0} onClick={() => void createPlanFromImport(preview)}>用已选 {selected.length} 个地点生成行程</button>
+              {preview.items.length > 8 ? <Button type="text" aria-expanded={Boolean(expandedImports[preview.id])} onClick={() => setExpandedImports((current) => ({ ...current, [preview.id]: !current[preview.id] }))}>{expandedImports[preview.id] ? "收起" : `查看全部 ${preview.items.length} 个地点`}</Button> : null}
+              <Button type="primary" block disabled={busy || selected.length === 0} onClick={() => void createPlanFromImport(preview)}>用已选 {selected.length} 个地点生成行程</Button>
             </article>;
           }
           if (item.kind === "hotels") return <HotelCards key={item.id} hotels={item.value.hotels} title={`${item.value.destination}住宿候选`} citation={item.value.citation} />;
           if (item.kind === "flights") return <FlightCards key={item.id} flights={item.value.flights} title={`${item.value.fromCity} → ${item.value.toCity}`} citation={item.value.citation} />;
           const plan = item.value;
           const weather = weatherText(plan);
-          return <article className={styles.plan} key={item.id}>
+          return <div className={styles.planGroup} key={item.id}>
+            <article className={styles.plan}>
             <div className={styles.planHeader}>
               <div>
                 <p className={styles.translationLabel}>第 {plan.versionNumber} 版行程</p>
                 <h2>{plan.title}</h2>
               </div>
-              <p className={styles.planCost}>约 {plan.totalEstimatedCost.toLocaleString()} {plan.currency}</p>
+              <p className={styles.planCost}>约 {plan.totalEstimatedCost.toLocaleString()} {currencyLabel(plan.currency)}</p>
             </div>
             <p className={styles.planSummary}>{plan.summary}</p>
             {weather || plan.exchangeRate ? (
@@ -518,15 +531,18 @@ export function ConversationScreen({
                           </div>
                         ) : null}
                       </div>
-                      <span>{item.estimatedCost > 0 ? `约 ${item.estimatedCost}` : "免费"}</span>
+                      <span>{item.estimatedCost > 0 ? `约 ${item.estimatedCost.toLocaleString()} ${currencyLabel(item.currency)}` : "免费"}</span>
                     </div>
                   ))}
-                  <p className={styles.dayCost}>当天约 {day.estimatedCost.toLocaleString()} {plan.currency}</p>
+                  <p className={styles.dayCost}>当天约 {day.estimatedCost.toLocaleString()} {currencyLabel(plan.currency)}</p>
                 </section>
               ))}
             </div>
-            <button className={styles.confirmAction} type="button" disabled={busy || confirmedTrips[plan.tripId]} onClick={() => void confirm(plan)}>{confirmedTrips[plan.tripId] ? "已放入开始出发吧" : "确认这个行程"}</button>
-          </article>;
+            </article>
+            <div className={styles.planAction}>
+              <Button type="primary" block disabled={busy || confirmedTrips[plan.tripId]} onClick={() => void confirm(plan)}>{confirmedTrips[plan.tripId] ? "已放入开始出发吧 ✓" : "确认这个行程"}</Button>
+            </div>
+          </div>;
         })}
         {status ? <p className={styles.status}>{status}</p> : null}
       </section>
@@ -604,7 +620,7 @@ function HotelCards({ hotels, title, embedded = false, citation }: { hotels: Hot
     <h2>{title}</h2><CitationBadge citation={citation} />
     <div className={styles.hotelList}>{hotels.slice(0, 3).map((hotel) => <article key={hotel.id} className={styles.hotelItem}>
       <div><strong>{hotel.name}</strong><p>{hotel.starRating ? `${hotel.starRating} 星 · ` : ""}{hotel.recommendation || hotel.address}</p></div>
-      <div className={styles.hotelPrice}><strong>约 {hotel.lowestPrice.toLocaleString()} {hotel.currency}</strong><span>每晚起</span></div>
+      <div className={styles.hotelPrice}><strong>约 {hotel.lowestPrice.toLocaleString()} {currencyLabel(hotel.currency)}</strong><span>每晚起</span></div>
       {hotel.bookingUrl ? <a href={hotel.bookingUrl} target="_blank" rel="noreferrer">查看房型</a> : null}
     </article>)}</div>
     <p className={styles.hotelNotice}>价格与房态来自第三方，预订前请在跳转页面再次确认。</p>
@@ -618,7 +634,7 @@ function FlightCards({ flights, title, embedded = false, citation }: { flights: 
     <div className={styles.hotelList}>{flights.slice(0, 3).map((flight) => <article key={flight.id} className={styles.flightItem}>
       <div className={styles.flightRoute}><strong>{flight.flightNumbers}</strong><span>{flight.direct ? "直飞" : `${flight.transferCity ?? "中转"}转机`}</span></div>
       <div className={styles.flightTimes}><time>{flight.departureAt.slice(11, 16)}</time><span>{flight.duration}</span><time>{flight.arrivalAt.slice(11, 16)}</time></div>
-      <div className={styles.hotelPrice}><strong>约 {flight.price.toLocaleString()} {flight.currency}</strong><span>经济舱参考价</span></div>
+      <div className={styles.hotelPrice}><strong>约 {flight.price.toLocaleString()} {currencyLabel(flight.currency)}</strong><span>经济舱参考价</span></div>
     </article>)}</div>
     <p className={styles.hotelNotice}>价格与余票来自第三方实时查询，购买前请在出票平台再次确认。</p>
   </section>;

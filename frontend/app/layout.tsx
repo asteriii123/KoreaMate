@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import "animal-island-ui/style";
 import "./globals.css";
 import { AppShell } from "../components/shell/app-shell";
 

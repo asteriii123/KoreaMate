@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { FlightOption, HotelOption, PlaceResult, TripPlan } from "@koreamate/contracts";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
@@ -22,6 +22,7 @@ import { MemoryService } from "../memory/memory.service.js";
 import { OpenAiCompatibleMemoryExtractor } from "../memory/memory-llm.js";
 import { CitationFactory } from "../citation/citation.factory.js";
 import { KnowledgeSearchService } from "../knowledge/search.js";
+import { StreamingLlmService } from "../agent/streaming-llm.service.js";
 
 type TravelJob = { jobId: string; conversationId: string; sourceMessageId: string; text: string; images?: string[] };
 type PlannedItem = { time: string; title: string; description: string; estimatedCost: number; placeQuery: string | null; place: PlaceResult | null };
@@ -30,6 +31,8 @@ type StoredItem = { id: string; startTime: string; title: string; description: s
 
 @Injectable()
 export class TravelService {
+  private readonly logger = new Logger(TravelService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(TRAVEL_PROVIDER) private readonly provider: TravelProvider,
@@ -43,6 +46,7 @@ export class TravelService {
     private readonly memoryExtractor: OpenAiCompatibleMemoryExtractor,
     private readonly citations: CitationFactory,
     private readonly knowledgeSearch: KnowledgeSearchService,
+    private readonly llm: StreamingLlmService,
   ) {}
 
   async process(job: TravelJob): Promise<void> {
@@ -134,6 +138,9 @@ export class TravelService {
         return;
       }
 
+      // Stream the natural reply (true LLM token streaming) while the plan is enriched and persisted below.
+      const replyPromise = this.streamPlanReply(job.jobId, result);
+
       const normalizedDays = this.normalizeDays(result.days, resolvedRequirements.startDate, resolvedRequirements.days);
       const days = await this.enrichDays(normalizedDays);
       const firstPlace = days.flatMap((day) => day.items).find((item) => item.place)?.place ?? null;
@@ -147,6 +154,7 @@ export class TravelService {
           : Promise.resolve([]),
       ]);
       const totalCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);
+      const replyText = await replyPromise;
       const versionNumber = (previous?.versionNumber ?? 0) + 1;
       const version = await this.prisma.$transaction(async (transaction) => {
         await Promise.all(days.flatMap((day) => day.items).filter((item) => item.place).map((item) => transaction.place.updateMany({ where: { id: item.place!.id, nameZh: null }, data: { nameZh: item.title } })));
@@ -172,6 +180,9 @@ export class TravelService {
         });
         await transaction.trip.update({ where: { id: trip.id }, data: { title: result.title } });
         await transaction.message.create({
+          data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: replyText } },
+        });
+        await transaction.message.create({
           data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { tripVersionId: created.id } },
         });
         return created;
@@ -181,6 +192,7 @@ export class TravelService {
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_PLAN_READY" });
     } catch (error) {
       const notConfigured = error instanceof TravelProviderNotConfiguredError;
+      this.logger.error(`Travel planning failed for job ${job.jobId}: ${error instanceof Error ? error.message : String(error)}`);
       await this.finish(job.jobId, "FAILED", "job.failed", {
         code: notConfigured ? "TRAVEL_PROVIDER_NOT_CONFIGURED" : "TRAVEL_PROVIDER_FAILED",
         message: notConfigured ? "旅行规划服务还没有配置 API Key。" : "旅行规划暂时不可用，请稍后重试。",
@@ -403,22 +415,26 @@ export class TravelService {
   }
 
   private async answerHotelQuestion(job: TravelJob, tripId: string, requirements: { destination: string | null; startDate: string | null; days: number | null; travelers: number | null } | null): Promise<void> {
-    if (!requirements?.destination || !requirements.startDate) {
-      const answer = "告诉我入住城市和日期，我就能查询实时酒店。";
+    const today = new Date().toISOString().slice(0, 10);
+    const startDate = requirements?.startDate ?? this.inferRelativeDate(job.text, today);
+    if (!requirements?.destination || !startDate) {
+      const answer = !requirements?.destination
+        ? "告诉我想查询哪个城市的酒店。"
+        : "告诉我想查哪天入住的酒店（比如 9 月 27 日）。";
       await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
       await this.appendEvent(job.jobId, "travel.answer", { answer });
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
       return;
     }
-    const checkOut = this.addDays(requirements.startDate, Math.max(1, (requirements.days ?? 2) - 1));
-    const hotels = await this.loadHotels(tripId, requirements.destination, requirements.startDate, checkOut, requirements.travelers ?? 1, job.text);
+    const checkOut = this.addDays(startDate, Math.max(1, (requirements?.days ?? 2) - 1));
+    const hotels = await this.loadHotels(tripId, requirements.destination, startDate, checkOut, requirements?.travelers ?? 1, job.text);
     if (hotels.length === 0) {
       const answer = "酒店实时查询暂时不可用，现有行程没有被修改。";
       await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
       await this.appendEvent(job.jobId, "travel.answer", { answer });
     } else {
       await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { hotels } } });
-      await this.appendEvent(job.jobId, "travel.hotel.ready", { result: { provider: "rollinggo-hotel", destination: requirements.destination, checkIn: requirements.startDate, checkOut, fetchedAt: new Date().toISOString(), hotels } });
+      await this.appendEvent(job.jobId, "travel.hotel.ready", { result: { provider: "rollinggo-hotel", destination: requirements.destination, checkIn: startDate, checkOut, fetchedAt: new Date().toISOString(), hotels } });
     }
     await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_HOTEL_READY" });
   }
@@ -433,27 +449,48 @@ export class TravelService {
         this.prisma.providerCall.create({ data: { provider: result.provider, operation: "hotel.search", status: "SUCCEEDED", durationMs: Date.now() - startedAt, request: { destination, checkIn, checkOut, guests }, response: { resultCount: result.hotels.length } } }),
       ]);
       return result.hotels;
-    } catch {
+    } catch (error) {
+      this.logger.warn(`Hotel search failed: ${error instanceof Error ? error.message : String(error)}`);
       await this.prisma.providerCall.create({ data: { provider: "rollinggo-hotel", operation: "hotel.search", status: "FAILED", durationMs: Date.now() - startedAt, errorCode: "PROVIDER_FAILED", request: { destination, checkIn, checkOut, guests } } });
       return [];
     }
   }
 
   private async answerFlightQuestion(job: TravelJob, tripId: string, requirements: { departureCity: string | null; destination: string | null; startDate: string | null } | null): Promise<void> {
-    if (!requirements?.departureCity || !requirements.destination || !requirements.startDate) {
-      const answer = "告诉我出发城市、目的地和出发日期，我就能查询实时航班。";
+    const today = new Date().toISOString().slice(0, 10);
+    const startDate = requirements?.startDate ?? this.inferRelativeDate(job.text, today);
+    if (!requirements?.departureCity || !requirements?.destination || !startDate) {
+      const answer = !requirements?.departureCity
+        ? "告诉我想从哪个城市出发，我就能查询实时航班。"
+        : !requirements?.destination
+          ? "告诉我想飞往哪个城市，我就能查询实时航班。"
+          : "告诉我想查哪天出发的航班（比如 9 月 27 日）。";
       await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
       await this.appendEvent(job.jobId, "travel.answer", { answer });
       await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
       return;
     }
-    const flights = await this.loadFlights(tripId, requirements.departureCity, requirements.destination, requirements.startDate);
+    if (!this.flights.cityCode(requirements.departureCity)) {
+      const answer = `暂时还不支持从「${requirements.departureCity}」出发的航班查询，请换一个出发城市试试。`;
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
+      await this.appendEvent(job.jobId, "travel.answer", { answer });
+      await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
+      return;
+    }
+    if (!this.flights.cityCode(requirements.destination)) {
+      const answer = `暂时还不支持查询到「${requirements.destination}」的航班，请换一个目的地试试。`;
+      await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
+      await this.appendEvent(job.jobId, "travel.answer", { answer });
+      await this.finish(job.jobId, "COMPLETED", "job.completed", { stage: "TRAVEL_ANSWER" });
+      return;
+    }
+    const flights = await this.loadFlights(tripId, requirements.departureCity, requirements.destination, startDate);
     if (flights.length === 0) {
       const answer = "航班实时查询暂时不可用，现有行程没有被修改。";
       await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { text: answer } } });
       await this.appendEvent(job.jobId, "travel.answer", { answer });
     } else {
-      const result = { provider: "variflight", fromCity: requirements.departureCity, toCity: requirements.destination, departureDate: requirements.startDate, fetchedAt: new Date().toISOString(), flights };
+      const result = { provider: "variflight", fromCity: requirements.departureCity, toCity: requirements.destination, departureDate: startDate, fetchedAt: new Date().toISOString(), flights };
       await this.prisma.message.create({ data: { conversationId: job.conversationId, role: "ASSISTANT", contentType: "TEXT", content: { flights } } });
       await this.appendEvent(job.jobId, "travel.flight.ready", { result });
     }
@@ -470,7 +507,8 @@ export class TravelService {
         this.prisma.providerCall.create({ data: { provider: result.provider, operation: "flight.search", status: "SUCCEEDED", durationMs: Date.now() - startedAt, request: { fromCity, toCity, departureDate }, response: { resultCount: result.flights.length } } }),
       ]);
       return result.flights;
-    } catch {
+    } catch (error) {
+      this.logger.warn(`Flight search failed: ${error instanceof Error ? error.message : String(error)}`);
       await this.prisma.providerCall.create({ data: { provider: "variflight", operation: "flight.search", status: "FAILED", durationMs: Date.now() - startedAt, errorCode: "PROVIDER_FAILED", request: { fromCity, toCity, departureDate } } });
       return [];
     }
@@ -518,6 +556,13 @@ export class TravelService {
     return date.toISOString().slice(0, 10);
   }
 
+  private inferRelativeDate(text: string, today: string): string | null {
+    if (/后天/.test(text)) return this.addDays(today, 2);
+    if (/明天/.test(text)) return this.addDays(today, 1);
+    if (/今天/.test(text)) return today;
+    return null;
+  }
+
   private toPreviousPlan(version: { title: string; summary: string; currency: string; days: Array<{ dayNumber: number; date: Date | null; title: string; items: Array<{ startTime: string; title: string; description: string; estimatedCost: unknown }> }> }): unknown {
     return { title: version.title, summary: version.summary, currency: version.currency, days: version.days.map((day) => ({ dayNumber: day.dayNumber, date: day.date?.toISOString().slice(0, 10) ?? null, title: day.title, items: day.items.map((item) => ({ time: item.startTime, title: item.title, description: item.description, estimatedCost: Number(item.estimatedCost) })) })) };
   }
@@ -538,5 +583,27 @@ export class TravelService {
   private async finish(jobId: string, status: "COMPLETED" | "FAILED", type: string, data: Prisma.InputJsonValue): Promise<void> {
     await this.appendEvent(jobId, type, data);
     await this.prisma.job.update({ where: { id: jobId }, data: { status } });
+  }
+
+  private replyContext(plan: { title: string; summary: string; days: Array<{ dayNumber: number; title: string; items: Array<{ title: string }> }> }): string {
+    const days = plan.days.map((day) => `第${day.dayNumber}天·${day.title}：${day.items.map((item) => item.title).join("、")}`).join("；");
+    return `行程标题：${plan.title}\n摘要：${plan.summary}\n${days}`;
+  }
+
+  private async streamPlanReply(jobId: string, plan: { title: string; summary: string; days: Array<{ dayNumber: number; title: string; items: Array<{ title: string }> }> }): Promise<string> {
+    let full = "";
+    try {
+      for await (const chunk of this.llm.streamReply({
+        system: "你是 KoreaMate 旅行助手。请根据下面的行程，用 1-2 句简洁自然的中文回复用户，确认目的地、天数和亮点。直接输出回复正文，不要 markdown，不要解释。",
+        user: this.replyContext(plan),
+      })) {
+        full += chunk;
+        await this.appendEvent(jobId, "agent.reply.delta", { delta: chunk });
+      }
+      return full.trim() || plan.summary;
+    } catch {
+      if (!full.trim()) await this.appendEvent(jobId, "agent.reply.delta", { delta: plan.summary });
+      return full.trim() || plan.summary;
+    }
   }
 }

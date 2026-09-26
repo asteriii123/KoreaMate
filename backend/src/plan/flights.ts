@@ -9,6 +9,7 @@ type ToolResult = { content?: Array<{ type: string; text?: string }>; isError?: 
 
 const CITY_CODES: Record<string, string> = {
   上海: "SHA", 北京: "BJS", 广州: "CAN", 深圳: "SZX", 成都: "CTU", 杭州: "HGH", 南京: "NKG", 武汉: "WUH", 重庆: "CKG", 厦门: "XMN", 青岛: "TAO", 西安: "SIA", 天津: "TSN",
+  哈尔滨: "HRB", 沈阳: "SHE", 大连: "DLC", 长春: "CGQ", 长沙: "CSX", 郑州: "CGO", 昆明: "KMG", 济南: "TNA", 福州: "FOC", 三亚: "SYX", 海口: "HAK", 香港: "HKG", 澳门: "MFM", 台北: "TPE",
   首尔: "SEL", 仁川: "SEL", 釜山: "PUS", 济州: "CJU", 济州岛: "CJU",
 };
 

@@ -5,11 +5,13 @@ import { PrismaService } from "../database/prisma.service.js";
 import {
   TRANSLATION_PROVIDER,
   TranslationProviderNotConfiguredError,
+  type ProviderTranslation,
   type TranslationProvider,
 } from "./translate-provider.js";
 import { PaddleOcrProvider, PaddleOcrUnavailableError } from "./ocr.js";
 import { ImageAssetsService } from "../image/image.service.js";
 import { ImageRendererService, type RenderRegion } from "./render.js";
+import { StreamingLlmService } from "../agent/streaming-llm.service.js";
 
 type TranslationJob = {
   jobId: string;
@@ -28,6 +30,7 @@ export class TranslationService {
     private readonly ocr: PaddleOcrProvider,
     private readonly imageAssets: ImageAssetsService,
     private readonly renderer: ImageRendererService,
+    private readonly llm: StreamingLlmService,
   ) {}
 
   async process(job: TranslationJob): Promise<void> {
@@ -38,6 +41,7 @@ export class TranslationService {
       }
       await this.appendEvent(job.jobId, "translation.started", { message: "正在理解这句话…" });
       const result = await this.provider.translate(job.text);
+      const replyText = await this.streamTranslationReply(job.jobId, job.text, result);
       const translation = await this.prisma.$transaction(async (transaction) => {
         const record = await transaction.translation.create({
           data: {
@@ -46,6 +50,14 @@ export class TranslationService {
             sourceText: job.text,
             provider: this.provider.name,
             ...result,
+          },
+        });
+        await transaction.message.create({
+          data: {
+            conversationId: job.conversationId,
+            role: "ASSISTANT",
+            contentType: "TEXT",
+            content: { text: replyText },
           },
         });
         await transaction.message.create({
@@ -180,5 +192,33 @@ export class TranslationService {
   ): Promise<void> {
     await this.appendEvent(jobId, type, data);
     await this.prisma.job.update({ where: { id: jobId }, data: { status } });
+  }
+
+  private async streamTranslationReply(jobId: string, sourceText: string, result: ProviderTranslation): Promise<string> {
+    const fallback = result.pronunciation
+      ? `「${sourceText}」的译文是「${result.translatedText}」（读作 ${result.pronunciation}）。`
+      : `「${sourceText}」的译文是「${result.translatedText}」。`;
+    const context = [
+      `原文：${sourceText}`,
+      `翻译方向：${result.sourceLanguage === "zh" ? "中文 → 韩语" : "韩语 → 中文"}`,
+      `译文：${result.translatedText}`,
+      `自然表达：${result.naturalExpression}`,
+      `发音提示：${result.pronunciation ?? "无"}`,
+      `语气：${result.politeness}`,
+    ].join("\n");
+    let full = "";
+    try {
+      for await (const chunk of this.llm.streamReply({
+        system: "你是 KoreaMate 翻译助手。根据下面的翻译结果，用一句简洁自然的中文告诉用户这句话的意思、读法和语气。直接输出正文，不要 markdown，不要解释。",
+        user: context,
+      })) {
+        full += chunk;
+        await this.appendEvent(jobId, "agent.reply.delta", { delta: chunk });
+      }
+      return full.trim() || fallback;
+    } catch {
+      if (!full.trim()) await this.appendEvent(jobId, "agent.reply.delta", { delta: fallback });
+      return full.trim() || fallback;
+    }
   }
 }

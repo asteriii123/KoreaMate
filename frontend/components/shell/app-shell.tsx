@@ -23,11 +23,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   function openAccount(): void { setAccountOpen(true); setAccountError(""); setMemories(null); void listMemories().then((value) => setMemories(value.items)).catch(() => { setMemories([]); setAccountError("偏好暂时无法加载，请稍后重试。"); }); }
   async function removeMemory(item: UserMemory): Promise<void> { setMemories((current) => current?.filter((value) => value.id !== item.id) ?? []); try { await deleteMemory(item.id); } catch (error) { setMemories((current) => [item, ...(current ?? [])]); setAccountError(`删除失败：${error instanceof Error ? error.message : "请求未完成"}`); } }
 
+  const isLanding = pathname === "/";
+  if (isLanding) return <>{children}</>;
   return <div className={`${styles.shell} ${collapsed ? styles.isCollapsed : ""}`}>
     <button className={styles.mobileMenu} type="button" onClick={() => setMobileOpen(true)} aria-label="打开菜单">☰</button>
     {mobileOpen ? <button className={styles.scrim} type="button" aria-label="关闭菜单" onClick={closeMobile} /> : null}
     <aside className={`${styles.sidebar} ${mobileOpen ? styles.mobileOpen : ""}`} aria-label="主导航">
-      <div className={styles.brandRow}><Link href="/" onClick={closeMobile}><span className={styles.logo}>K</span><span className={styles.label}>KoreaMate</span></Link><button type="button" onClick={toggle} className={styles.collapse} aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}>‹</button></div>
+      <div className={styles.brandRow}><Link href="/" onClick={closeMobile}><span className={styles.logo}>🌿</span><span className={styles.label}>KoreaMate</span></Link><button type="button" onClick={toggle} className={styles.collapse} aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}>‹</button></div>
       <nav className={styles.nav}>
         <Link className={pathname === "/travel" ? styles.active : ""} href="/travel" onClick={closeMobile}><span aria-hidden="true">✦</span><span className={styles.label}>规划旅行</span></Link>
         <Link className={pathname === "/depart" ? styles.active : ""} href="/depart" onClick={closeMobile}><span aria-hidden="true">↗</span><span className={styles.label}>开始出发吧</span></Link>

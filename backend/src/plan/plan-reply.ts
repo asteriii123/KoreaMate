@@ -32,17 +32,31 @@ export function applyContextAnswer(
   if (pendingField === "budget" && value > 0) {
     return { ...requirements, budget: value };
   }
+  if (pendingField === "flightBudget" && value > 0) {
+    return { ...requirements, flightBudget: value };
+  }
+  if (pendingField === "hotelBudget" && value > 0) {
+    return { ...requirements, hotelBudget: value };
+  }
   return requirements;
 }
 
 export function inferPendingField(question: string, requirements: TripRequirements): PendingField {
   if (/几(个|位)?人|同行|出行人数/.test(question)) return "travelers";
   if (/几天|多久/.test(question)) return "days";
+  if (/机票.*(预算|多少钱|费用)/.test(question)) return "flightBudget";
+  if (/(酒店|住宿).*(预算|多少钱|费用)/.test(question)) return "hotelBudget";
+  if (/含.*(机票|机酒|酒店)|纯玩|预算.*(含|包含)/.test(question)) return "budgetScope";
+  if (/从哪|出发地|出发城市|哪个城市出发|哪里出发/.test(question)) return "departureCity";
   if (/预算|多少钱/.test(question)) return "budget";
   if (/什么时候|日期|几月/.test(question)) return "startDate";
   if (/哪里|哪座城市|目的地/.test(question)) return "destination";
   if (!requirements.destination) return "destination";
+  if (!requirements.departureCity) return "departureCity";
   if (!requirements.days) return "days";
   if (!requirements.travelers) return "travelers";
+  if (!requirements.budgetScope) return "budgetScope";
+  if (requirements.budgetScope === "all_inclusive" && !requirements.flightBudget) return "flightBudget";
+  if (requirements.budgetScope === "all_inclusive" && !requirements.hotelBudget) return "hotelBudget";
   return "budget";
 }

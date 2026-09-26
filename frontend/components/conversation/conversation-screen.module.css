@@ -6,14 +6,19 @@
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 64px;
-  padding: 10px max(28px, calc((100vw - 1120px) / 2));
   border-bottom: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
   backdrop-filter: blur(18px);
+}
+
+.headerInner {
+  width: min(100%, 1120px);
+  min-height: 64px;
+  margin: 0 auto;
+  padding: 10px 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .back {
@@ -79,7 +84,8 @@
 }
 
 .answerCard {
-  width: min(780px, 88%);
+  width: fit-content;
+  max-width: min(780px, 88%);
   padding: 20px 22px;
   border: 1px solid var(--color-border);
   border-radius: 22px 22px 22px 6px;
@@ -176,12 +182,51 @@
   cursor: pointer;
 }
 
-.plan {
+.planGroup {
   margin-top: 24px;
+}
+
+.plan {
   padding: clamp(20px, 5vw, 32px);
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background: var(--color-surface);
+}
+
+.planAction {
+  --animal-primary-color: var(--km-wood);
+  --animal-primary-color-hover: #8f6033;
+  --animal-primary-color-active: #613d1d;
+  --animal-primary-color-bg: #f2e4d0;
+  margin: 16px 10px 0;
+  padding: 0 8px 7px;
+  border-radius: 999px;
+  background: #c4ad96;
+}
+
+.planAction button {
+  min-height: 54px;
+  border: 2px solid #6b4526;
+  border-radius: 999px;
+  background-color: var(--animal-primary-color);
+  color: #fffaf0;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgb(75 44 19 / 35%);
+}
+
+.planAction button:hover:not(:disabled) {
+  background-color: var(--animal-primary-color-hover);
+  transform: translateY(-1px);
+}
+
+.planAction button:active:not(:disabled) {
+  background-color: var(--animal-primary-color-active);
+  transform: translateY(3px);
+}
+
+.planAction button:disabled {
+  opacity: 0.82;
 }
 
 .planHeader {
@@ -258,6 +303,7 @@
 .planItem p {
   margin: 5px 0 0;
   line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .placeMeta {
@@ -477,9 +523,13 @@
 .citation[open] > div { position: absolute; z-index: 4; left: 0; top: calc(100% + 6px); min-width: 190px; display: grid; gap: 6px; padding: 12px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 12px 32px rgb(15 23 42 / 14%); color: var(--color-muted); }
 .citation strong { color: var(--color-error); }
 .citation a { color: var(--color-text); font-weight: 650; }
+.intro:after { content: "JEJU 33° 32′ N  ·  SEOUL 37° 34′ N"; display: block; margin-top: 34px; color: rgba(255,255,255,.58); font-size: .68rem; letter-spacing: .16em; }
 
 @media (max-width: 760px) {
-  .header { padding: 10px 16px; }
+  .headerInner { padding: 10px 20px; }
   .conversation { padding: 32px 20px 150px; }
   .intro { margin-top: 6vh; }
 }
+
+/* 清新海岛 · 应用页氛围 */
+.header{background:rgba(248,248,240,.9);border-bottom:2px solid var(--animal-border-color)}.page{background:var(--km-cream)}.conversation{padding-top:28px}.intro{max-width:900px;margin:4vh 0 44px;padding:40px 44px;border-radius:26px;color:var(--km-wood);background:#fffdf6;border:2px solid var(--animal-border-color);box-shadow:var(--animal-shadow-lg)}.intro h1{font-size:clamp(2.6rem,6vw,5rem)}.intro p,.status{color:var(--animal-text-color-secondary)}.composerWrap{background:linear-gradient(to top,#f8f8f0 72%,transparent)}.composer{border:2px solid var(--animal-border-color);border-radius:24px;box-shadow:var(--animal-shadow-lg)}.assistantBubble,.answerCard,.translation,.imageTranslation,.importCard,.hotelCard,.plan{border:2px solid var(--animal-border-color);background:#fffdf6;box-shadow:var(--animal-shadow-base)}.bubble{background:var(--animal-primary-color)}.send{background:var(--animal-primary-color)}.translationText{color:var(--km-wood)}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "animal-island-ui";
 import type { ImageTranslationResult } from "@koreamate/contracts";
 import { resolveApiUrl } from "../../lib/api";
 import styles from "./image-translation-card.module.css";
@@ -43,7 +44,7 @@ export function ImageTranslationCard({ result }: { result: ImageTranslationResul
         </button>
         {asset.translatedUrl ? <div className={styles.actions}>
           <a href={`${resolveApiUrl(asset.translatedUrl)}?download=1`} download>下载译图</a>
-          <button onClick={() => void share(asset)}>分享</button>
+          <Button type="default" onClick={() => void share(asset)}>分享</Button>
         </div> : <p className={styles.fallback}>译图生成失败，已保留下方文字翻译。</p>}
       </section>;
     })}</div>

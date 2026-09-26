@@ -1,31 +1,35 @@
 :root {
-  color-scheme: light dark;
-  --color-canvas: #f7f8fa;
-  --color-surface: #ffffff;
-  --color-text: #111827;
-  --color-muted: #5b6472;
-  --color-border: #d9dde4;
-  --color-action: #111827;
-  --color-on-action: #ffffff;
-  --color-error: #b42318;
-  --color-focus: #2563eb;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: var(--color-canvas);
-  color: var(--color-text);
-}
+  color-scheme: light;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-canvas: #0b0c0e;
-    --color-surface: #17191d;
-    --color-text: #f5f7fa;
-    --color-muted: #c2c8d0;
-    --color-border: #343840;
-    --color-action: #f5f7fa;
-    --color-on-action: #111827;
-    --color-error: #ffb4ab;
-    --color-focus: #7eb2ff;
-  }
+  /* 清新海岛 · 覆盖 animal-island-ui 默认主色（草木绿 CTA） */
+  --animal-primary-color: #6fba2c;
+  --animal-primary-color-hover: #85cc45;
+  --animal-primary-color-active: #5a9e1e;
+  --animal-primary-color-bg: #eef7e6;
+
+  /* 语义别名（应用页通用） */
+  --color-canvas: var(--animal-bg-color);
+  --color-surface: var(--animal-bg-color-secondary);
+  --color-text: var(--animal-text-color);
+  --color-muted: var(--animal-text-color-secondary);
+  --color-border: var(--animal-border-color);
+  --color-action: var(--animal-primary-color);
+  --color-on-action: #ffffff;
+  --color-error: var(--animal-error-color);
+  --color-focus: var(--animal-warning-color);
+
+  /* 清新海岛专用 */
+  --km-sky: #5bb9e6;
+  --km-sky-deep: #3f9fd8;
+  --km-sky-soft: #dff0fb;
+  --km-grass: #6fba2c;
+  --km-wood: #794f27;
+  --km-cream: #f8f8f0;
+  --km-sun: #f5c31c;
+
+  font-family: var(--animal-font-family);
+  background: var(--animal-bg-color);
+  color: var(--animal-text-color);
 }
 
 * {

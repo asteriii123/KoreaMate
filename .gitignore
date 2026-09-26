@@ -32,3 +32,6 @@ Thumbs.db
 
 # Local tooling
 .superpowers/
+
+# Local temp
+/tmp-cookie.txt

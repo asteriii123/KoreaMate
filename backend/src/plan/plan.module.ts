@@ -16,6 +16,7 @@ import { SavedPlacesModule } from "../saved/saved.module.js";
 import { MemoryModule } from "../memory/memory.module.js";
 import { CitationsModule } from "../citation/citation.module.js";
 import { KnowledgeModule } from "../knowledge/knowledge.module.js";
+import { StreamingLlmService } from "../agent/streaming-llm.service.js";
 
 @Module({
   imports: [DatabaseModule, PlacesModule, SavedPlacesModule, MemoryModule, CitationsModule, KnowledgeModule],
@@ -30,6 +31,7 @@ import { KnowledgeModule } from "../knowledge/knowledge.module.js";
     OpenMeteoWeatherProvider,
     FrankfurterExchangeProvider,
     OpenAiCompatibleTravelProvider,
+    StreamingLlmService,
     { provide: TRAVEL_PROVIDER, useExisting: OpenAiCompatibleTravelProvider },
   ],
   exports: [TravelService, HotelMcpProvider, FlightMcpProvider, RemoteMcpClientService],
